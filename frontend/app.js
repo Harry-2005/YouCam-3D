@@ -19,6 +19,7 @@ const state = {
   stylePollTimer: null,
   garmentFile: null,
   styleUrls: [],
+  genderMode: localStorage.getItem("parallax_gender_mode") || "female",
 };
 
 const authGate = $("#authGate");
@@ -44,6 +45,8 @@ const stylePreview = $("#stylePreview");
 const garmentFrame = $("#garmentFrame");
 const tryonResult = $("#tryonResult");
 const garmentDescription = $("#garmentDescription");
+const providerInput = $("#providerInput");
+const providerStatus = $("#providerStatus");
 const approveStyleButton = $("#approveStyleButton");
 const advancedPanel = $(".advanced-panel");
 const viewCountInput = $("#viewCountInput");
@@ -84,12 +87,57 @@ const lightIntensityValue = $("#lightIntensityValue");
 const logDialog = $("#logDialog");
 const logContent = $("#logContent");
 const toast = $("#toast");
+const genderButtons = [...document.querySelectorAll("[data-gender]")];
+const resultTabButtons = [...document.querySelectorAll("[data-result-tab]")];
 
 function notify(message) {
   toast.textContent = message;
   toast.classList.add("show");
   clearTimeout(notify.timer);
   notify.timer = setTimeout(() => toast.classList.remove("show"), 3200);
+}
+
+function applyGenderMode(mode, announce = false) {
+  state.genderMode = mode === "male" ? "male" : "female";
+  document.body.dataset.theme = state.genderMode;
+  localStorage.setItem("parallax_gender_mode", state.genderMode);
+  genderButtons.forEach((button) => {
+    button.setAttribute("aria-pressed", String(button.dataset.gender === state.genderMode));
+  });
+  if (announce) notify(`${state.genderMode === "male" ? "Blue" : "Pink"} runway activated`);
+}
+
+function setResultTab(tab) {
+  const selected = tab === "model" ? "model" : "angles";
+  document.body.dataset.resultTab = selected;
+  resultTabButtons.forEach((button) => {
+    button.setAttribute("aria-selected", String(button.dataset.resultTab === selected));
+  });
+}
+
+genderButtons.forEach((button) => button.addEventListener("click", () => applyGenderMode(button.dataset.gender, true)));
+resultTabButtons.forEach((button) => button.addEventListener("click", () => setResultTab(button.dataset.resultTab)));
+applyGenderMode(state.genderMode);
+
+async function loadClothingProviders() {
+  try {
+    const response = await apiFetch("/v1/clothing-providers");
+    const providers = await response.json();
+    providerInput.innerHTML = "";
+    providers.forEach((provider) => {
+      const option = document.createElement("option");
+      option.value = provider.id;
+      option.textContent = provider.configured ? provider.label : `${provider.label} · unavailable`;
+      option.disabled = !provider.configured;
+      providerInput.append(option);
+    });
+    const ready = providers.filter((provider) => provider.id !== "auto" && provider.configured);
+    providerStatus.textContent = ready.length
+      ? `${ready.length} fit engine${ready.length === 1 ? "" : "s"} ready`
+      : "No fit engine configured";
+  } catch {
+    providerStatus.textContent = "Fit engine status unavailable";
+  }
 }
 
 async function apiFetch(path, options = {}) {
@@ -124,6 +172,7 @@ async function connect(token = tokenInput.value.trim()) {
     authGate.classList.add("hidden");
     connectionButton.classList.add("online");
     connectionText.textContent = "Fitting room live";
+    await loadClothingProviders();
     await loadHistory();
     await loadLatestStyleJob();
   } catch (error) {
@@ -292,6 +341,8 @@ stylePreviewButton.addEventListener("click", async () => {
   payload.append("identity_image", state.references[0].file);
   payload.append("instagram_url", instagramUrl.value.trim());
   payload.append("garment_category", garmentCategory.value);
+  payload.append("provider", providerInput.value || "auto");
+  payload.append("gender_mode", state.genderMode);
   if (state.garmentFile) payload.append("garment_image", state.garmentFile);
   stylePreviewButton.disabled = true;
   stylePreviewButton.querySelector("span").textContent = "Starting your preview...";
@@ -436,6 +487,7 @@ function selectPipeline(pipeline) {
   state.pipeline = pipeline;
   state.modelZip = null;
   state.renderedModelId = null;
+  setResultTab(pipeline.status === "complete" ? "model" : "angles");
   clearInterval(state.pollTimer);
   renderPipeline(pipeline);
   state.pollTimer = setInterval(pollPipeline, 4000);
@@ -483,7 +535,10 @@ function renderPipeline(pipeline) {
   viewportTitle.textContent = pipeline.status === "failed" ? "This look needs another try" : pipeline.status === "training" ? "Building your 3D view..." : pipeline.status === "complete" ? "Adding the finishing details..." : "Your 3D look will appear here";
   viewportCopy.textContent = pipeline.error || (pipeline.status === "training" ? "We are shaping the model and applying its full-color material." : "Your consistent angle views are ready for the 3D build.");
   [...historyList.querySelectorAll(".history-item")].forEach((item) => item.classList.toggle("selected", item.dataset.id === pipeline.id));
-  if (pipeline.status === "complete" && state.renderedModelId !== pipeline.id) loadModel(pipeline.id);
+  if (pipeline.status === "complete" && state.renderedModelId !== pipeline.id) {
+    setResultTab("model");
+    loadModel(pipeline.id);
+  }
 }
 
 async function loadHistory() {
