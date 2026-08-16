@@ -4,6 +4,7 @@ import asyncio
 import base64
 from collections import deque
 from concurrent.futures import ThreadPoolExecutor
+import html
 import io
 import json
 import logging
@@ -97,6 +98,8 @@ CLOTHING_PROVIDER_ORDER = [
 CLOTHING_WEBHOOK_PROVIDERS_JSON = os.getenv("CLOTHING_WEBHOOK_PROVIDERS_JSON", "[]")
 STYLE_MAX_MEDIA_BYTES = int(os.getenv("STYLE_MAX_MEDIA_BYTES", str(100 * 1024**2)))
 INSTAGRAM_HOSTS = {"instagram.com", "www.instagram.com", "instagr.am", "www.instagr.am"}
+INSTAGRAM_MEDIA_HOST_SUFFIXES = (".cdninstagram.com", ".fbcdn.net")
+INSTAGRAM_COOKIES_FILE = Path(os.getenv("INSTAGRAM_COOKIES_FILE", ""))
 logger = logging.getLogger("nerfstudio-api")
 
 app = FastAPI(
@@ -166,6 +169,7 @@ class StyleJob(BaseModel):
         "queued",
         "downloading_media",
         "selecting_garment",
+        "awaiting_garment_selection",
         "uploading_assets",
         "generating_tryon",
         "complete",
@@ -179,12 +183,11 @@ class StyleJob(BaseModel):
     garment_description: str = ""
     source_type: str = ""
     selected_frame: str | None = None
+    selected_candidate_id: str | None = None
+    candidate_options: list[dict] = Field(default_factory=list)
     result_ready: bool = False
     pipeline_id: str | None = None
     error: str | None = None
-    provider_requested: str = "auto"
-    provider_used: str = ""
-    gender_mode: Literal["female", "male"] = "female"
 
 
 def now() -> str:
@@ -287,6 +290,21 @@ def write_style(style_id: str, **changes: object) -> dict:
 
 def public_style(style_id: str) -> dict:
     data = read_style(style_id)
+    public_options = []
+    for option in data.get("candidate_options", []):
+        candidate_id = str(option.get("id", ""))
+        if not candidate_id:
+            continue
+        public_options.append(
+            {
+                "id": candidate_id,
+                "label": option.get("label", "Outfit option"),
+                "garment_category": option.get("garment_category", "full_body"),
+                "description": option.get("description", ""),
+                "image_url": f"/v1/style-jobs/{style_id}/candidates/{candidate_id}",
+            }
+        )
+    data["candidate_options"] = public_options
     data["garment_url"] = (
         f"/v1/style-jobs/{style_id}/garment" if data.get("selected_frame") else None
     )
@@ -707,6 +725,51 @@ def normalize_image_to_jpeg(source: Path | bytes, destination: Path) -> None:
         raise RuntimeError("Prepared image exceeds YouCam's 10 MB limit")
 
 
+def download_instagram_preview(url: str, destination: Path) -> Path:
+    """Download the public Open Graph preview when direct media extractors are blocked."""
+    request = urllib.request.Request(
+        validate_instagram_url(url),
+        headers={
+            "User-Agent": (
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 Chrome/124.0 Safari/537.36"
+            ),
+            "Accept": "text/html,application/xhtml+xml",
+        },
+    )
+    with urllib.request.urlopen(request, timeout=30) as response:
+        page = response.read(2 * 1024**2 + 1)
+    if len(page) > 2 * 1024**2:
+        raise RuntimeError("Instagram preview page exceeded the safety limit")
+    markup = page.decode("utf-8", errors="replace")
+    patterns = (
+        r'<meta[^>]+property=["\']og:image["\'][^>]+content=["\']([^"\']+)',
+        r'<meta[^>]+content=["\']([^"\']+)["\'][^>]+property=["\']og:image["\']',
+    )
+    preview_url = ""
+    for pattern in patterns:
+        match = re.search(pattern, markup, flags=re.IGNORECASE)
+        if match:
+            preview_url = html.unescape(match.group(1))
+            break
+    parsed = urllib.parse.urlparse(preview_url)
+    hostname = (parsed.hostname or "").lower()
+    if parsed.scheme != "https" or not any(
+        hostname.endswith(suffix) for suffix in INSTAGRAM_MEDIA_HOST_SUFFIXES
+    ):
+        raise RuntimeError("Instagram did not publish a safe preview image")
+    image_request = urllib.request.Request(
+        preview_url, headers={"User-Agent": request.headers["User-agent"]}
+    )
+    with urllib.request.urlopen(image_request, timeout=45) as response:
+        payload = response.read(10 * 1024**2 + 1)
+    if len(payload) > 10 * 1024**2:
+        raise RuntimeError("Instagram preview image exceeds 10 MB")
+    output = destination / "instagram-public-preview.jpg"
+    normalize_image_to_jpeg(payload, output)
+    return output
+
+
 def download_instagram_media(url: str, destination: Path) -> list[Path]:
     validated = validate_instagram_url(url)
     destination.mkdir(parents=True, exist_ok=True)
@@ -714,8 +777,7 @@ def download_instagram_media(url: str, destination: Path) -> list[Path]:
     try:
         from yt_dlp import YoutubeDL
 
-        with YoutubeDL(
-            {
+        options = {
                 "outtmpl": str(destination / "instagram-%(id)s-%(autonumber)02d.%(ext)s"),
                 "format": "best[height<=1080]/best",
                 "noplaylist": True,
@@ -724,7 +786,9 @@ def download_instagram_media(url: str, destination: Path) -> list[Path]:
                 "socket_timeout": 30,
                 "retries": 2,
             }
-        ) as downloader:
+        if INSTAGRAM_COOKIES_FILE.is_file():
+            options["cookiefile"] = str(INSTAGRAM_COOKIES_FILE)
+        with YoutubeDL(options) as downloader:
             downloader.download([validated])
     except Exception as exc:
         errors.append(str(exc)[:180])
@@ -751,6 +815,11 @@ def download_instagram_media(url: str, destination: Path) -> list[Path]:
         except Exception as exc:
             errors.append(str(exc)[:180])
         media = [path for path in destination.rglob("*") if path.is_file() and path.suffix.lower() in supported]
+    if not media:
+        try:
+            media = [download_instagram_preview(validated, destination)]
+        except Exception as exc:
+            errors.append(str(exc)[:180])
     if not media:
         detail = "; ".join(errors) or "no downloadable media found"
         raise RuntimeError(
@@ -881,6 +950,111 @@ lower_body, full_body), and description (60-130 words). Requested category: """ 
     if not description:
         raise RuntimeError("The garment analyzer returned no description")
     return candidates[selected_index], description[:2000], category
+
+
+def analyze_garment_options(candidates: list[Path], requested_category: str) -> list[dict]:
+    """Group Instagram frames into a small set of distinct, user-selectable looks."""
+    client = genai.Client(
+        vertexai=True,
+        project=NANO_BANANA_PROJECT,
+        location=NANO_BANANA_LOCATION,
+        http_options=genai_types.HttpOptions(api_version="v1", timeout=120_000),
+    )
+    contents: list[object] = [
+        """Inspect these frames from one Instagram post or reel for a virtual try-on flow. Identify every
+visually distinct garment or complete outfit a user may reasonably want to try. Combine duplicate video frames
+of the same look. For each distinct option choose the clearest, sharpest, least occluded source frame. Return at
+most six options. Labels must be short and concrete, such as 'Rose blazer' or 'Ivory full look'. Descriptions
+must describe clothing only (silhouette, layers, fabric, colors, pattern, neckline, sleeves, closures and fit),
+never the person's face or identity.
+
+Return strict JSON with an options array. Every option must contain selected_index (zero-based integer), label,
+garment_category (upper_body, lower_body, or full_body), and description (35-100 words). If only one look exists,
+return exactly one option. Requested category: """ + requested_category
+    ]
+    for index, path in enumerate(candidates):
+        contents.append(f"Frame {index}:")
+        contents.append(
+            genai_types.Part.from_bytes(data=path.read_bytes(), mime_type="image/jpeg")
+        )
+    try:
+        response = client.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=contents,
+            config=genai_types.GenerateContentConfig(
+                temperature=0.1,
+                response_mime_type="application/json",
+            ),
+        )
+        analysis = json.loads((response.text or "").strip())
+    except Exception as exc:
+        logger.warning("Garment option analysis failed; exposing safe frame choices: %s", exc)
+        analysis = {"options": []}
+    finally:
+        client.close()
+
+    options: list[dict] = []
+    used_indices: set[int] = set()
+    for item in analysis.get("options", []) if isinstance(analysis, dict) else []:
+        try:
+            selected_index = int(item.get("selected_index", -1))
+        except (TypeError, ValueError):
+            continue
+        if selected_index in used_indices or not 0 <= selected_index < len(candidates):
+            continue
+        category = requested_category if requested_category != "auto" else str(
+            item.get("garment_category", "full_body")
+        )
+        if category not in {"upper_body", "lower_body", "full_body"}:
+            category = "full_body"
+        used_indices.add(selected_index)
+        options.append(
+            {
+                "id": f"look-{len(options) + 1}",
+                "source_index": selected_index,
+                "source_file": candidates[selected_index].name,
+                "label": str(item.get("label") or f"Outfit {len(options) + 1}")[:70],
+                "garment_category": category,
+                "description": str(item.get("description") or "Detected outfit reference.")[:2000],
+            }
+        )
+        if len(options) >= 6:
+            break
+    if not options:
+        for index, candidate in enumerate(candidates[:6]):
+            options.append(
+                {
+                    "id": f"look-{index + 1}",
+                    "source_index": index,
+                    "source_file": candidate.name,
+                    "label": f"Outfit option {index + 1}",
+                    "garment_category": (
+                        requested_category if requested_category != "auto" else "full_body"
+                    ),
+                    "description": "Choose this visible outfit frame for your YouCam fitting.",
+                }
+            )
+    return options
+
+
+def apply_garment_selection(style_id: str, option: dict) -> dict:
+    directory = style_dir(style_id)
+    candidate_name = Path(str(option.get("source_file", ""))).name
+    candidate = directory / "candidates" / candidate_name
+    fallback = directory / candidate_name
+    if not candidate.is_file() and fallback.is_file():
+        candidate = fallback
+    if not candidate.is_file():
+        raise RuntimeError("The selected outfit frame is unavailable")
+    garment_path = directory / "garment.jpg"
+    normalize_image_to_jpeg(candidate, garment_path)
+    return write_style(
+        style_id,
+        garment_category=option.get("garment_category", "full_body"),
+        garment_description=option.get("description", ""),
+        selected_frame=garment_path.name,
+        selected_candidate_id=option.get("id"),
+    )
 
 
 def youcam_json(method: str, path: str, payload: dict | None = None, timeout: int = 60) -> dict:
@@ -1110,72 +1284,54 @@ def execute_style_job(style_id: str) -> None:
     directory = STYLE_ROOT / style_id
     metadata = read_style(style_id)
     try:
-        candidates: list[Path]
-        fallback = directory / "garment-upload.jpg"
-        instagram_url = metadata.get("instagram_url", "")
-        if instagram_url:
-            write_style(style_id, status="downloading_media")
-            append_style_log(style_id, "Downloading public Instagram media")
-            try:
-                media = download_instagram_media(instagram_url, directory / "instagram")
-                candidates = collect_garment_candidates(media, directory)
-                source_type = "instagram"
-            except Exception:
-                if not fallback.is_file():
-                    raise
+        if not metadata.get("selected_frame"):
+            candidates: list[Path]
+            fallback = directory / "garment-upload.jpg"
+            instagram_url = metadata.get("instagram_url", "")
+            if instagram_url:
+                write_style(style_id, status="downloading_media")
+                append_style_log(style_id, "Downloading public Instagram media")
+                try:
+                    media = download_instagram_media(instagram_url, directory / "instagram")
+                    candidates = collect_garment_candidates(media, directory)
+                    source_type = "instagram"
+                except Exception:
+                    if not fallback.is_file():
+                        raise
+                    candidates = [fallback]
+                    source_type = "uploaded_fallback"
+                    append_style_log(
+                        style_id, "Instagram media unavailable; using uploaded garment fallback"
+                    )
+            else:
                 candidates = [fallback]
-                source_type = "uploaded_fallback"
-                append_style_log(style_id, "Instagram media unavailable; using uploaded garment fallback")
-        else:
-            candidates = [fallback]
-            source_type = "uploaded"
+                source_type = "uploaded"
 
-        write_style(style_id, status="selecting_garment", source_type=source_type)
-        selected, description, category = analyze_garment_candidates(
-            candidates, metadata.get("garment_category", "auto")
-        )
-        garment_path = directory / "garment.jpg"
-        normalize_image_to_jpeg(selected, garment_path)
-        write_style(
-            style_id,
-            garment_category=category,
-            garment_description=description,
-            selected_frame=garment_path.name,
-        )
-        append_style_log(style_id, f"Selected garment reference and classified {category}")
-
-        providers = clothing_provider_candidates(metadata.get("provider_requested", "auto"))
-        write_style(style_id, status="uploading_assets")
-        last_provider_error: Exception | None = None
-        for index, provider in enumerate(providers):
-            write_style(style_id, status="generating_tryon", provider_used=provider["id"])
-            append_style_log(style_id, f"Routing virtual try-on through {provider['label']}")
-            try:
-                if provider["kind"] == "native":
-                    run_youcam_clothing_provider(
-                        directory / "identity.jpg", garment_path, category, directory / "result.jpg"
-                    )
-                else:
-                    run_webhook_clothing_provider(
-                        provider,
-                        directory / "identity.jpg",
-                        garment_path,
-                        category,
-                        metadata.get("gender_mode", "female"),
-                        directory / "result.jpg",
-                    )
-                last_provider_error = None
-                break
-            except Exception as exc:
-                last_provider_error = exc
-                if metadata.get("provider_requested", "auto") != "auto" or index == len(providers) - 1:
-                    raise
+            write_style(style_id, status="selecting_garment", source_type=source_type)
+            options = analyze_garment_options(
+                candidates, metadata.get("garment_category", "auto")
+            )
+            write_style(style_id, candidate_options=options)
+            if source_type == "instagram" and len(options) > 1:
+                write_style(style_id, status="awaiting_garment_selection")
                 append_style_log(
-                    style_id,
-                    f"{provider['label']} was unavailable; trying the next configured fit engine",
+                    style_id, f"Found {len(options)} distinct outfit options; waiting for selection"
                 )
-        if last_provider_error is not None:
-            raise last_provider_error
+                return
+            metadata = apply_garment_selection(style_id, options[0])
+            append_style_log(style_id, "Outfit reference selected")
+
+        metadata = read_style(style_id)
+        garment_path = directory / "garment.jpg"
+        write_style(style_id, status="uploading_assets")
+        write_style(style_id, status="generating_tryon", provider_used="youcam")
+        append_style_log(style_id, "Generating the virtual try-on with YouCam Clothes v3")
+        run_youcam_clothing_provider(
+            directory / "identity.jpg",
+            garment_path,
+            metadata.get("garment_category", "full_body"),
+            directory / "result.jpg",
+        )
         write_style(style_id, status="complete", result_ready=True)
         append_style_log(style_id, "Virtual try-on preview is ready for approval")
     except Exception as exc:
@@ -2596,8 +2752,9 @@ def api_info() -> dict:
         "fashion_pipeline": {
             "create_preview": "POST /v1/style-jobs",
             "status": "GET /v1/style-jobs/{id}",
+            "choose_outfit": "POST /v1/style-jobs/{id}/garment-selection",
+            "try_on_engine": "YouCam Clothes v3",
             "approve_for_3d": "POST /v1/style-jobs/{id}/approve",
-            "providers": "GET /v1/clothing-providers",
         },
     }
 
@@ -2643,11 +2800,6 @@ def list_style_jobs() -> list[dict]:
     return jobs
 
 
-@app.get("/v1/clothing-providers", dependencies=[Depends(authenticate)])
-def list_clothing_providers() -> list[dict]:
-    return public_clothing_providers()
-
-
 @app.post(
     "/v1/style-jobs",
     response_model=StyleJob,
@@ -2659,15 +2811,11 @@ async def create_style_job(
     instagram_url: Annotated[str, Form()] = "",
     garment_image: Annotated[UploadFile | None, File(description="Optional garment fallback")] = None,
     garment_category: Annotated[str, Form()] = "auto",
-    provider: Annotated[str, Form()] = "auto",
-    gender_mode: Annotated[str, Form()] = "female",
 ) -> dict:
     if garment_category not in {"auto", "upper_body", "lower_body", "full_body"}:
         raise HTTPException(422, "Invalid garment category")
-    if gender_mode not in {"female", "male"}:
-        raise HTTPException(422, "Gender mode must be female or male")
     try:
-        resolve_clothing_provider(provider)
+        resolve_clothing_provider("youcam")
     except RuntimeError as exc:
         raise HTTPException(422, str(exc)) from exc
     if not instagram_url.strip() and garment_image is None:
@@ -2708,13 +2856,15 @@ async def create_style_job(
             "garment_description": "",
             "source_type": "pending",
             "selected_frame": None,
+            "selected_candidate_id": None,
+            "candidate_options": [],
             "has_fallback": has_fallback,
             "result_ready": False,
             "pipeline_id": None,
             "error": None,
-            "provider_requested": provider,
+            "provider_requested": "youcam",
             "provider_used": "",
-            "gender_mode": gender_mode,
+            "gender_mode": "female",
         }
         (directory / "style.json").write_text(json.dumps(metadata, indent=2))
         append_style_log(style_id, "Fashion transfer queued")
@@ -2743,6 +2893,56 @@ def get_style_garment(style_id: str) -> FileResponse:
     if not path.is_file():
         raise HTTPException(404, "Garment frame not found")
     return FileResponse(path, media_type="image/jpeg", filename="garment-reference.jpg")
+
+
+@app.get(
+    "/v1/style-jobs/{style_id}/candidates/{candidate_id}",
+    dependencies=[Depends(authenticate)],
+)
+def get_style_candidate(style_id: str, candidate_id: str) -> FileResponse:
+    metadata = read_style(style_id)
+    option = next(
+        (item for item in metadata.get("candidate_options", []) if item.get("id") == candidate_id),
+        None,
+    )
+    if not option:
+        raise HTTPException(404, "Outfit option not found")
+    candidate_name = Path(str(option.get("source_file", ""))).name
+    path = style_dir(style_id) / "candidates" / candidate_name
+    if not path.is_file():
+        path = style_dir(style_id) / candidate_name
+    if not path.is_file():
+        raise HTTPException(404, "Outfit image not found")
+    return FileResponse(path, media_type="image/jpeg", filename=f"{candidate_id}.jpg")
+
+
+@app.post(
+    "/v1/style-jobs/{style_id}/garment-selection",
+    response_model=StyleJob,
+    status_code=202,
+    dependencies=[Depends(authenticate)],
+)
+async def select_style_garment(
+    style_id: str,
+    candidate_id: Annotated[str, Form()],
+) -> dict:
+    metadata = read_style(style_id)
+    if metadata.get("status") != "awaiting_garment_selection":
+        raise HTTPException(409, "This fitting is not waiting for an outfit selection")
+    option = next(
+        (item for item in metadata.get("candidate_options", []) if item.get("id") == candidate_id),
+        None,
+    )
+    if not option:
+        raise HTTPException(422, "Choose one of the detected outfit options")
+    try:
+        apply_garment_selection(style_id, option)
+    except RuntimeError as exc:
+        raise HTTPException(409, str(exc)) from exc
+    write_style(style_id, status="queued", error=None)
+    append_style_log(style_id, f"Selected {option.get('label', 'outfit')} for YouCam fitting")
+    await style_queue.put(style_id)
+    return public_style(style_id)
 
 
 @app.get("/v1/style-jobs/{style_id}/result", dependencies=[Depends(authenticate)])
