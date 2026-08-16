@@ -1,0 +1,249 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="Try on a look, generate coherent views, and turn it into an interactive 3D model." />
+    <title>Parallax — Your AI Fitting Room</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wdth,wght@12..96,75..100,300..800&family=Manrope:wght@400;500;600;700&family=Silkscreen:wght@400;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="./styles.css?v=20260817-soft-pixel-1" />
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js",
+          "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/",
+          "@sparkjsdev/spark": "https://sparkjs.dev/releases/spark/2.1.0/spark.module.js"
+        }
+      }
+    </script>
+  </head>
+  <body class="setup-mode">
+    <div class="grain" aria-hidden="true"></div>
+
+    <div class="auth-gate" id="authGate">
+      <div class="auth-card">
+        <div class="auth-mark" aria-hidden="true"><span></span><span></span><span></span></div>
+        <p class="eyebrow">Private fitting room</p>
+        <h1>Your looks,<br /><em>safely yours.</em></h1>
+        <p class="auth-copy">Enter your access key to open this fitting room. It stays securely in this browser.</p>
+        <label class="field auth-field">
+          <span>Access key</span>
+          <input id="tokenInput" type="password" autocomplete="current-password" placeholder="••••••••••••••••" />
+        </label>
+        <button class="button button-primary auth-button" id="connectButton"><span>Open my fitting room</span><b>→</b></button>
+        <p class="form-error" id="authError"></p>
+      </div>
+    </div>
+
+    <header class="topbar">
+      <a class="brand" href="./" aria-label="Parallax AI fitting room home">
+        <span class="brand-orbit"><i></i></span>
+        <span><strong>PARALLAX</strong><small>PERSONAL AI FITTING ROOM</small></span>
+      </a>
+      <div class="topbar-meta">
+        <span class="coordinate">IMAGE-FIRST · YOUR 3D LOOKS</span>
+        <button class="connection" id="connectionButton"><i></i><span id="connectionText">Connecting</span></button>
+      </div>
+    </header>
+
+    <main class="shell">
+      <aside class="control-rail">
+        <div class="rail-heading">
+          <p class="eyebrow">Your fitting room</p>
+          <h2>Try it on.<br /><em>See it in 3D.</em></h2>
+          <p class="rail-intro">Add a clear photo and choose an outfit. We create the try-on, every camera angle, and your finished 3D look.</p>
+        </div>
+
+        <form id="pipelineForm">
+          <section class="control-block guided-step">
+            <div class="control-label"><span>01</span><label for="referenceInput">Your photo</label><small id="fileCount">0 / 8</small></div>
+            <div class="dropzone" id="dropzone" tabindex="0" role="button" aria-label="Upload reference images">
+              <input id="referenceInput" type="file" accept="image/png,image/jpeg,image/webp,image/heic,image/heif" multiple hidden />
+              <div class="drop-reticle"><span></span></div>
+              <strong>Add a clear person photo</strong>
+              <small>Front-facing · face and body visible</small>
+            </div>
+            <div class="reference-strip" id="referenceStrip"></div>
+          </section>
+
+          <section class="control-block wardrobe-block guided-step">
+            <div class="control-label"><span>02</span><label for="instagramUrl">Choose an outfit</label><small>Link or image</small></div>
+            <label class="source-field">
+              <span>Paste a public Instagram reel or post</span>
+              <input id="instagramUrl" type="url" inputmode="url" placeholder="https://www.instagram.com/reel/..." />
+            </label>
+            <div class="source-divider"><span>or</span></div>
+            <button class="garment-upload" id="garmentUploadButton" type="button">
+              <i aria-hidden="true">+</i><span id="garmentUploadLabel">Upload an outfit image</span><small>Useful for private posts</small>
+            </button>
+            <input id="garmentInput" type="file" accept="image/png,image/jpeg,image/webp" hidden />
+            <button class="button button-primary style-button" id="stylePreviewButton" type="button" disabled><span>Preview my look</span><b>AI ✦</b></button>
+            <div class="style-progress hidden" id="styleProgress"><i></i><span id="styleProgressText">Preparing your outfit preview...</span></div>
+          </section>
+
+          <details class="advanced-panel">
+            <summary><span>Fine-tune your result</span><small>Optional</small><i aria-hidden="true">+</i></summary>
+            <div class="advanced-content">
+              <label class="advanced-field" for="promptInput"><span>Extra instructions</span><textarea id="promptInput" rows="3" maxlength="20000" placeholder="Keep a specific pose, expression, accessory, or material detail..."></textarea></label>
+              <div class="select-grid advanced-selects">
+                <label><span>Garment region</span><select id="garmentCategory"><option value="auto" selected>Auto detect</option><option value="upper_body">Upper body</option><option value="lower_body">Lower body</option><option value="full_body">Full body</option></select></label>
+                <label><span>3D output</span><select id="methodInput"><option value="splatfacto" selected>Face-preserving 3D</option><option value="hunyuan3d">Relightable mesh</option><option value="nerfacto">NeRF mesh</option><option value="nerfacto-big">NeRF detailed</option></select></label>
+                <label><span>Quality</span><select id="iterationsInput"><option value="5000">Draft</option><option value="10000" selected>Balanced</option><option value="30000">Fine</option></select></label>
+                <label class="fixed-views"><span>Orbit</span><strong id="viewCountValue">12 views</strong><input id="viewCountInput" type="range" min="12" max="12" value="12" step="1" disabled /></label>
+              </div>
+              <div class="direct-path">
+                <p>Already have complete subject references?</p>
+                <button class="button launch-button" id="launchButton" type="submit"><span>Build 3D from my photos</span><b>→</b></button>
+              </div>
+            </div>
+          </details>
+
+          <p class="form-error" id="formError"></p>
+        </form>
+
+        <details class="history-block">
+          <summary><span>REC</span><strong>My recent looks</strong><small>Open</small></summary>
+          <div class="history-tools"><button id="refreshHistory" type="button">Refresh ↻</button></div>
+          <div class="history-list" id="historyList"><p class="muted">No looks yet.</p></div>
+        </details>
+      </aside>
+
+      <section class="workbench">
+        <div class="workbench-head">
+          <div>
+            <p class="eyebrow" id="stageEyebrow">Your AI fitting room</p>
+            <h1 id="stageTitle">Wear the idea.<br />See <em>every angle.</em></h1>
+          </div>
+          <div class="job-stamp" id="jobStamp">
+            <span>YOUR LOOK</span>
+            <strong>—</strong>
+            <small>READY WHEN YOU ARE</small>
+          </div>
+        </div>
+
+        <section class="setup-guide" id="setupGuide">
+          <img class="setup-pixel-art" src="./assets/pixel-capture-lab-v1.png" alt="" aria-hidden="true" decoding="async" />
+          <div class="setup-guide-copy">
+            <p class="eyebrow">Three simple steps</p>
+            <h2>From one photo<br />to every angle.</h2>
+            <p>Preview the outfit first. Once it feels right, we keep the person, pose, clothes, and colors consistent while building the 3D model.</p>
+          </div>
+          <ol>
+            <li><i>01</i><div><strong>Add your photo</strong><span>One clear, front-facing image</span></div></li>
+            <li><i>02</i><div><strong>Choose an outfit</strong><span>Instagram link or uploaded image</span></div></li>
+            <li><i>03</i><div><strong>Approve the preview</strong><span>We create every angle and your 3D look</span></div></li>
+          </ol>
+        </section>
+
+        <section class="fashion-stage hidden" id="stylePreview" aria-live="polite">
+          <div class="fashion-stage-head">
+            <div><p class="eyebrow">Your preview is ready</p><h2>Love this look?</h2></div>
+            <span>AI virtual try-on</span>
+          </div>
+          <div class="style-compare">
+            <figure><img id="garmentFrame" alt="Selected garment reference" /><figcaption><i>01</i> Outfit inspiration</figcaption></figure>
+            <figure><img id="tryonResult" alt="Virtual try-on result" /><figcaption><i>02</i> Your outfit preview</figcaption></figure>
+          </div>
+          <div class="fashion-decision">
+            <div><span>Outfit details</span><p id="garmentDescription"></p></div>
+            <button class="button approve-style" id="approveStyleButton" type="button"><span>Looks good — make it 3D</span><b>12 views →</b></button>
+          </div>
+        </section>
+
+        <div class="pipeline-track" aria-label="3D creation progress">
+          <div class="phase active" data-phase="references"><i>01</i><span>Your look</span></div>
+          <div class="track-line"><b id="trackProgress"></b></div>
+          <div class="phase" data-phase="views"><i>02</i><span>Every angle</span></div>
+          <div class="track-line"><b></b></div>
+          <div class="phase" data-phase="verify"><i>03</i><span>Quality check</span></div>
+          <div class="track-line"><b></b></div>
+          <div class="phase" data-phase="train"><i>04</i><span>Building 3D</span></div>
+          <div class="track-line"><b></b></div>
+          <div class="phase" data-phase="model"><i>05</i><span>Ready</span></div>
+        </div>
+
+        <section class="contact-panel">
+          <div class="panel-head">
+            <div><span class="panel-index">A</span><h3>Your generated angles</h3></div>
+            <div class="panel-tools">
+              <span id="angleReadout">ANGLE —°</span>
+              <button id="datasetButton" disabled>Save all views</button>
+            </div>
+          </div>
+          <div class="contact-grid" id="contactGrid"></div>
+          <div class="coherence-bar">
+            <div><span>LOOK CONSISTENCY</span><strong id="coherenceValue">Waiting</strong></div>
+            <div class="meter"><i id="coherenceMeter"></i></div>
+            <p id="coherenceNote">We keep your identity, outfit, pose, and colors consistent across every angle.</p>
+          </div>
+        </section>
+
+        <section class="model-panel">
+          <div class="panel-head">
+            <div><span class="panel-index">B</span><h3>Your 3D look</h3></div>
+            <div class="panel-tools">
+              <button id="logButton" disabled>Details</button>
+              <button class="accent-action" id="downloadButton" disabled>Save 3D look ↓</button>
+            </div>
+          </div>
+          <div class="viewport" id="viewport">
+            <canvas id="modelCanvas"></canvas>
+            <button class="viewport-lighting-trigger" id="lightRigButton" type="button" aria-controls="lightRig" aria-expanded="false">
+              <i aria-hidden="true"></i>
+              <span>Move the light</span>
+              <small id="lightRigState">Waiting</small>
+            </button>
+            <aside class="light-rig hidden unavailable" id="lightRig" aria-label="Directional lighting controls">
+              <div class="light-rig-head">
+                <div><i></i><span>Light direction</span></div>
+                <div class="light-rig-actions">
+                  <button id="lightResetButton" type="button">Reset</button>
+                  <button id="lightCloseButton" type="button" aria-label="Close lighting controls">×</button>
+                </div>
+              </div>
+              <p class="light-status" id="lightStatus">Your light controls appear when the 3D look is ready.</p>
+              <div class="light-dome" id="lightDome" role="presentation">
+                <span class="light-axis light-axis-x"></span>
+                <span class="light-axis light-axis-y"></span>
+                <span class="light-horizon">LIGHT MAP</span>
+                <i class="light-handle" id="lightHandle"></i>
+              </div>
+              <p class="light-instruction">Drag the glow to move the light</p>
+              <label class="light-control">
+                <span>Direction <output id="lightAzimuthValue">32°</output></span>
+                <input id="lightAzimuth" type="range" min="0" max="360" step="1" value="32" />
+              </label>
+              <label class="light-control">
+                <span>Height <output id="lightElevationValue">35°</output></span>
+                <input id="lightElevation" type="range" min="0" max="90" step="1" value="35" />
+              </label>
+              <label class="light-control">
+                <span>Brightness <output id="lightIntensityValue">2.8</output></span>
+                <input id="lightIntensity" type="range" min="0" max="6" step="0.1" value="2.8" />
+              </label>
+            </aside>
+            <div class="viewport-empty" id="viewportEmpty">
+              <div class="orbital-glyph"><i></i><i></i><span>3D</span></div>
+              <strong id="viewportTitle">Your 3D look will appear here</strong>
+              <p id="viewportCopy">Approve a look and we will build an interactive, full-color model you can rotate and relight.</p>
+            </div>
+            <div class="viewport-hud">
+              <span id="modelFormat">FULL-COLOR 3D LOOK</span><span id="pointCount">WAITING FOR YOUR LOOK</span><span>DRAG TO ROTATE · SCROLL TO ZOOM</span>
+            </div>
+          </div>
+        </section>
+      </section>
+    </main>
+
+    <dialog id="logDialog">
+      <div class="dialog-head"><div><p class="eyebrow">Build details</p><h3>Your 3D process</h3></div><button id="closeLog" aria-label="Close">×</button></div>
+      <pre id="logContent">No details yet.</pre>
+    </dialog>
+
+    <div class="toast" id="toast" role="status"></div>
+
+    <script type="module" src="./app.js?v=20260817-soft-pixel-1"></script>
+  </body>
+</html>
