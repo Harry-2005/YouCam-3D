@@ -18,7 +18,7 @@
 
 <br />
 
-**YouCam 3D** is an image-first fitting room and GPU reconstruction service. A user uploads a person photo, supplies an outfit image or public Instagram URL, approves a YouCam virtual try-on, and receives a coherent twelve-view capture plus an interactive 3D result.
+**YouCam 3D** is an image-first fitting room and GPU reconstruction service. A user uploads a person photo, supplies an outfit image or public Instagram URL, approves a routed virtual try-on, and receives a coherent twelve-view capture plus an interactive 3D result.
 
 [Architecture](#system-architecture) · [Quick start](#quick-start) · [API](#api-workflow) · [Configuration](#configuration-flags) · [Contributing](#contributing)
 
@@ -31,7 +31,7 @@
 | Stage | Result |
 | --- | --- |
 | **Outfit understanding** | Extracts a useful garment frame from an image, post, or reel. |
-| **YouCam virtual try-on** | Applies the selected outfit while retaining the user’s identity. |
+| **Routed virtual try-on** | Selects the best configured clothing API and applies the outfit while retaining identity. |
 | **Subject locking** | Freezes identity, pose, garment construction, colors, and accessories. |
 | **Coherent orbit** | Builds twelve calibrated views at 30° azimuth intervals. |
 | **Quality layer** | Audits identity, camera progression, pose drift, and reconstruction fitness. |
@@ -39,7 +39,7 @@
 | **Web viewer** | Displays the result with orbit controls, downloads, history, and mesh lighting. |
 
 > [!IMPORTANT]
-> **Provider clarity:** all public fashion-image generation and virtual try-on calls in the product experience are sent to **YouCam Clothes v3 APIs**. The closed-orbit stage is an internal reconstruction subsystem, not a user-selectable image-generation API.
+> **Provider clarity:** **YouCam Clothes v3** remains the native default. A provider registry can route the same fitting-room request to additional server-side clothing APIs through a documented webhook contract. Provider credentials and vendor payloads never reach the browser.
 
 ## Why this pipeline
 
@@ -84,8 +84,11 @@ flowchart LR
     Social --> API
     Garment --> API
 
-    API --> YC[YouCam Clothes v3]
+    API --> FitRouter{Clothing provider router}
+    FitRouter --> YC[YouCam Clothes v3]
+    FitRouter --> Webhooks[Configured vendor webhooks]
     YC --> Preview[Approved outfit preview]
+    Webhooks --> Preview
     Preview --> Lock[Canonical subject lock]
     Lock --> Orbit[12-view closed orbit]
     Orbit --> Audit[Coherence and pose audit]
@@ -108,7 +111,7 @@ flowchart LR
     classDef primary fill:#ffe4ee,stroke:#f43f7a,color:#222;
     classDef ai fill:#f0ecff,stroke:#7c5cfa,color:#222;
     classDef compute fill:#eef9ff,stroke:#49a9d8,color:#222;
-    class YC,Preview primary;
+    class YC,Webhooks,Preview primary;
     class Lock,Orbit,Audit ai;
     class Splat,Mesh,GPU compute;
 ```
@@ -120,15 +123,17 @@ sequenceDiagram
     actor U as User
     participant D as Dashboard
     participant A as FastAPI
-    participant Y as YouCam API
+    participant R as Clothing provider router
+    participant P as Selected clothing API
     participant O as Orbit + audit layer
     participant G as A100 reconstruction worker
     participant V as 3D viewer
 
     U->>D: Upload identity + outfit source
     D->>A: Create style job
-    A->>Y: Upload protected assets
-    Y-->>A: YouCam try-on result
+    A->>R: Resolve auto or selected provider
+    R->>P: Upload protected assets
+    P-->>A: Virtual try-on result
     A-->>D: Outfit preview
     U->>D: Approve look
     D->>A: Queue 3D pipeline
@@ -144,7 +149,7 @@ sequenceDiagram
 
 | Layer | Technology | Purpose |
 | --- | --- | --- |
-| Fashion imaging | **YouCam Clothes v3** | Server-to-server virtual try-on and garment transfer |
+| Fashion imaging | **YouCam Clothes v3 + provider webhooks** | Auto-routed virtual try-on and garment transfer |
 | API | **FastAPI**, Pydantic, Uvicorn | Authenticated jobs, uploads, callbacks, polling, artifacts |
 | Media ingestion | **yt-dlp**, gallery-dl, FFmpeg | Public post/reel extraction and frame selection |
 | Orbit orchestration | Google Cloud generative media + Cloud Storage | Canonical subject locking and camera motion |
@@ -164,7 +169,7 @@ sequenceDiagram
 - Docker Engine and NVIDIA Container Toolkit
 - Python 3.10+
 - Google Cloud service account attached to the host
-- YouCam API credentials with Clothes v3 access
+- At least one configured clothing provider; YouCam Clothes v3 is the native default
 - A DNS name for TLS, or a trusted reverse proxy
 
 ### 1. Clone
@@ -267,6 +272,8 @@ Use `POST /v1/pipelines/{id}/retrain` with `method=splatfacto`, `nerfacto`, or `
 | `PIPELINE_STABILIZATION_PASSES` | `2` | Maximum pose-repair passes |
 | `PIPELINE_STABILIZATION_WORKERS` | `4` | Concurrent repaired-view workers |
 | `YOUCAM_TASK_TIMEOUT` | `420` | YouCam polling timeout in seconds |
+| `CLOTHING_PROVIDER_ORDER` | `youcam` | Comma-separated automatic routing priority |
+| `CLOTHING_WEBHOOK_PROVIDERS_JSON` | `[]` | Additional clothing-provider gateway definitions |
 | `NERFSTUDIO_IMAGE` | `ghcr.io/nerfstudio-project/nerfstudio:latest` | GPU worker container |
 
 ### Reconstruction profiles
