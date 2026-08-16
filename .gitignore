@@ -1,0 +1,26 @@
+*.json
+*.pyc
+__pycache__/
+.env
+.env.*
+.nerfstudio-api-token
+.nerfstudio-endpoint
+youcam-creds.txt
+*-key.json
+
+# Local browser tests, generated previews, and reconstruction artifacts
+/audit-output/
+/auth-redesign.png
+/dashboard-redesign.png
+/dashboard-mobile.png
+/dashboard-mobile-2.png
+*.zip
+*.glb
+*.ply
+*.mp4
+
+# Editor and OS noise
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
