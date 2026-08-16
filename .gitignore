@@ -10,6 +10,7 @@ youcam-creds.txt
 
 # Local browser tests, generated previews, and reconstruction artifacts
 /audit-output/
+/tmp/
 /auth-redesign.png
 /dashboard-redesign.png
 /dashboard-mobile.png
