@@ -3,207 +3,53 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="description" content="Try on any look, generate coherent views, and turn it into an interactive 3D model." />
-    <title>Parallax — AI Fitting Room</title>
+    <meta name="description" content="Try clothing from an Instagram post or your own image with YouCam, then explore the look in 3D." />
+    <title>Parallax — Your YouCam Fitting Room</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wdth,wght@12..96,75..100,300..800&family=Manrope:wght@400;500;600;700&family=Silkscreen:wght@400;700&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="./styles.css?v=20260817-runway-2" />
-    <script type="importmap">
-      {
-        "imports": {
-          "three": "https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js",
-          "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/",
-          "@sparkjsdev/spark": "https://sparkjs.dev/releases/spark/2.1.0/spark.module.js"
-        }
-      }
-    </script>
+    <link href="https://fonts.googleapis.com/css2?family=Bodoni+Moda:opsz,wght@6..96,500;6..96,600;6..96,700&family=DM+Sans:wght@400;500;600;700&family=Silkscreen:wght@400;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="./styles.css?v=20260817-clay-1" />
   </head>
-  <body class="setup-mode" data-theme="female" data-result-tab="angles">
-    <div class="radiance" aria-hidden="true"><i></i><i></i><i></i></div>
-    <div class="pixel-field" aria-hidden="true"></div>
-
-    <div class="auth-gate" id="authGate">
-      <div class="auth-card">
-        <div class="auth-mark" aria-hidden="true"><span></span><span></span><span></span></div>
-        <p class="eyebrow">Private fitting room</p>
-        <h1>Step into<br /><em>your next look.</em></h1>
-        <p class="auth-copy">Enter your access key. It stays securely in this browser.</p>
-        <label class="field auth-field"><span>Access key</span><input id="tokenInput" type="password" autocomplete="current-password" placeholder="••••••••••••••••" /></label>
-        <button class="button button-primary auth-button" id="connectButton"><span>Open fitting room</span><b>→</b></button>
-        <p class="form-error" id="authError"></p>
-      </div>
-    </div>
-
-    <header class="topbar">
-      <a class="brand" href="./" aria-label="Parallax home">
-        <span class="brand-orbit" aria-hidden="true"><i></i></span>
-        <span><strong>PARALLAX</strong><small>AI FITTING ROOM</small></span>
-      </a>
-      <nav class="top-actions" aria-label="Session controls">
-        <span class="coordinate">IMAGE → ORBIT → 3D</span>
-        <button class="connection" id="connectionButton"><i></i><span id="connectionText">Connecting</span></button>
-      </nav>
+  <body class="landing-body">
+    <div class="landing-noise" aria-hidden="true"></div>
+    <header class="landing-nav">
+      <a class="brand" href="./" aria-label="Parallax home"><span class="brand-pixels"><i></i><i></i><i></i><i></i></span><span><strong>PARALLAX</strong><small>POWERED BY YOUCAM</small></span></a>
+      <a class="nav-cta" href="./studio.html">Open fitting room <span>↗</span></a>
     </header>
 
-    <main class="experience">
-      <header class="workbench-head">
-        <div>
-          <p class="eyebrow" id="stageEyebrow">Your private pixel runway</p>
-          <h1 id="stageTitle">One photo.<br /><em>Every angle.</em></h1>
-          <p class="hero-copy">Borrow a look from anywhere. We fit it to you, lock every detail, and build a 3D version you can turn in your hands.</p>
+    <main>
+      <section class="landing-hero">
+        <div class="hero-copy-block">
+          <p class="eyebrow"><i></i> YOUR PRIVATE DIGITAL WARDROBE</p>
+          <h1>See the look.<br /><em>Wear the idea.</em></h1>
+          <p class="landing-lede">Paste a public Instagram reel or post, pick the outfit you mean, and let YouCam fit it to your photo—before we turn it into a view you can explore from every angle.</p>
+          <div class="hero-actions"><a class="landing-primary" href="./studio.html">Try a look <b>→</b></a><a class="landing-secondary" href="#how-it-works">See how it works</a></div>
+          <div class="trust-line"><span>01 · YOUR PHOTO</span><i></i><span>02 · YOUCAM FIT</span><i></i><span>03 · 3D LOOK</span></div>
         </div>
-        <div class="mode-cluster">
-          <span class="mode-label">Style mode</span>
-          <div class="mode-switch" id="genderMode" role="group" aria-label="Style mode">
-            <button type="button" data-gender="female" aria-pressed="true"><i>F</i><span>Female</span></button>
-            <button type="button" data-gender="male" aria-pressed="false"><i>M</i><span>Male</span></button>
-            <b aria-hidden="true"></b>
-          </div>
-          <div class="job-stamp" id="jobStamp"><span>SESSION</span><strong>—</strong><small>READY</small></div>
+        <div class="clay-stage" aria-label="Clay fashion figure wearing a blush pink outfit">
+          <div class="clay-halo"></div>
+          <img src="./assets/clay-runway-v2.png" alt="Sculpted clay fashion figure in a pink outfit" />
+          <span class="pixel-tag tag-one">TRY IT</span><span class="pixel-tag tag-two">TURN IT</span>
+          <div class="look-chip"><i></i><div><small>LOOK 001</small><strong>Blush tailoring</strong></div><span>↗</span></div>
         </div>
-      </header>
-
-      <section class="studio-card">
-        <form id="pipelineForm" class="composer">
-          <div class="composer-head">
-            <div><span class="pixel-kicker">NEW LOOK</span><h2>Build your fitting-room preview</h2></div>
-            <div class="tiny-route"><i></i><span id="providerStatus">Finding fit engines…</span></div>
-          </div>
-
-          <div class="input-deck">
-            <section class="guided-step identity-step">
-              <div class="step-title"><i>01</i><div><strong>Your photo</strong><span id="fileCount">0 / 8</span></div></div>
-              <div class="dropzone" id="dropzone" tabindex="0" role="button" aria-label="Upload reference images">
-                <input id="referenceInput" type="file" accept="image/png,image/jpeg,image/webp,image/heic,image/heif" multiple hidden />
-                <div class="drop-symbol" aria-hidden="true"><i></i><i></i><span>+</span></div>
-                <div><strong>Drop a clear photo</strong><small>Face and body visible · front-facing works best</small></div>
-              </div>
-              <div class="reference-strip" id="referenceStrip"></div>
-            </section>
-
-            <div class="flow-arrow" aria-hidden="true"><span>→</span></div>
-
-            <section class="guided-step wardrobe-step">
-              <div class="step-title"><i>02</i><div><strong>The outfit</strong><span>Link or image</span></div></div>
-              <label class="source-field">
-                <span>Instagram reel or post</span>
-                <input id="instagramUrl" type="url" inputmode="url" placeholder="https://instagram.com/reel/…" />
-              </label>
-              <div class="source-divider"><span>OR</span></div>
-              <button class="garment-upload" id="garmentUploadButton" type="button">
-                <i aria-hidden="true">+</i><span id="garmentUploadLabel">Upload an outfit image</span><small>JPG, PNG or WEBP</small>
-              </button>
-              <input id="garmentInput" type="file" accept="image/png,image/jpeg,image/webp" hidden />
-            </section>
-          </div>
-
-          <div class="launch-row">
-            <div class="route-selects">
-              <label><span>Fit engine</span><select id="providerInput"><option value="auto">Auto · best available</option></select></label>
-              <label><span>Garment</span><select id="garmentCategory"><option value="auto" selected>Auto detect</option><option value="upper_body">Upper body</option><option value="lower_body">Lower body</option><option value="full_body">Full body</option></select></label>
-            </div>
-            <button class="button button-primary style-button" id="stylePreviewButton" type="button" disabled><span>Create my preview</span><b>PIXEL ✦</b></button>
-          </div>
-          <div class="style-progress hidden" id="styleProgress"><i></i><span id="styleProgressText">Preparing your outfit preview…</span></div>
-
-          <details class="advanced-panel">
-            <summary><span>Advanced controls</span><small>Optional</small><i aria-hidden="true">+</i></summary>
-            <div class="advanced-content">
-              <label class="advanced-field" for="promptInput"><span>Identity or material notes</span><textarea id="promptInput" rows="3" maxlength="20000" placeholder="Keep a specific expression, accessory, material, or pose…"></textarea></label>
-              <div class="select-grid">
-                <label><span>3D output</span><select id="methodInput"><option value="splatfacto" selected>Face-preserving 3D</option><option value="hunyuan3d">Relightable mesh</option><option value="nerfacto">NeRF mesh</option><option value="nerfacto-big">NeRF detailed</option></select></label>
-                <label><span>Quality</span><select id="iterationsInput"><option value="5000">Draft</option><option value="10000" selected>Balanced</option><option value="30000">Fine</option></select></label>
-                <label class="fixed-views"><span>Orbit</span><strong id="viewCountValue">12 views</strong><input id="viewCountInput" type="range" min="12" max="12" value="12" disabled /></label>
-              </div>
-              <button class="button launch-button" id="launchButton" type="submit"><span>Skip fitting · build from my photos</span><b>→</b></button>
-            </div>
-          </details>
-          <p class="form-error" id="formError"></p>
-        </form>
-
-        <section class="setup-guide" id="setupGuide">
-          <div class="runway-visual" aria-hidden="true">
-            <div class="figure-pixel"><i></i><i></i><i></i><i></i><i></i></div>
-            <div class="orbit-line"><i></i><i></i><i></i><i></i></div>
-            <span class="visual-label">12 × COHERENT</span>
-          </div>
-          <div class="setup-guide-copy">
-            <p class="eyebrow">The shortest path to 3D</p>
-            <h2>Fit. Approve.<br />Step around.</h2>
-            <ol>
-              <li><i>01</i><span>We create the virtual try-on</span></li>
-              <li><i>02</i><span>You approve the exact look</span></li>
-              <li><i>03</i><span>We generate 12 locked angles + 3D</span></li>
-            </ol>
-          </div>
-        </section>
-
-        <section class="fashion-stage hidden" id="stylePreview" aria-live="polite">
-          <div class="fashion-stage-head"><div><p class="eyebrow">Preview ready</p><h2>Same you. New look.</h2></div><span>VIRTUAL TRY-ON</span></div>
-          <div class="style-compare">
-            <figure><img id="garmentFrame" alt="Selected garment reference" /><figcaption><i>01</i> Outfit source</figcaption></figure>
-            <div class="compare-arrow" aria-hidden="true">→</div>
-            <figure><img id="tryonResult" alt="Virtual try-on result" /><figcaption><i>02</i> On you</figcaption></figure>
-          </div>
-          <div class="fashion-decision">
-            <div><span>OUTFIT READ</span><p id="garmentDescription"></p></div>
-            <button class="button approve-style" id="approveStyleButton" type="button"><span>Lock this look</span><b>MAKE 3D →</b></button>
-          </div>
-        </section>
       </section>
 
-      <section class="creation-stage">
-        <div class="pipeline-track" aria-label="3D creation progress">
-          <div class="phase active" data-phase="references"><i>01</i><span>Look</span></div><div class="track-line"><b id="trackProgress"></b></div>
-          <div class="phase" data-phase="views"><i>02</i><span>Angles</span></div><div class="track-line"><b></b></div>
-          <div class="phase" data-phase="verify"><i>03</i><span>Check</span></div><div class="track-line"><b></b></div>
-          <div class="phase" data-phase="train"><i>04</i><span>Build</span></div><div class="track-line"><b></b></div>
-          <div class="phase" data-phase="model"><i>05</i><span>3D</span></div>
+      <section class="landing-proof" id="how-it-works">
+        <div class="proof-heading"><p class="eyebrow">ONE CLEAR FLOW</p><h2>From saved post<br />to <em>your</em> look.</h2></div>
+        <div class="proof-steps">
+          <article><span>01</span><div><strong>Bring yourself</strong><p>Add one clear, front-facing photo. It stays inside your private session.</p></div></article>
+          <article><span>02</span><div><strong>Paste or upload</strong><p>Use a public Instagram link. If there are several outfits, you choose the exact one.</p></div></article>
+          <article><span>03</span><div><strong>Fit with YouCam</strong><p>YouCam creates the try-on preview. Approve it only when it feels right.</p></div></article>
+          <article><span>04</span><div><strong>Explore every angle</strong><p>Generate consistent views and open the finished 3D look in your browser.</p></div></article>
         </div>
-
-        <div class="result-tabs" role="tablist" aria-label="Creation output">
-          <button id="viewsTab" type="button" role="tab" aria-selected="true" data-result-tab="angles"><i></i>Generated angles</button>
-          <button id="modelTab" type="button" role="tab" aria-selected="false" data-result-tab="model"><i></i>3D model</button>
-        </div>
-
-        <section class="result-shell">
-          <section class="contact-panel" id="anglesPanel">
-            <div class="panel-head"><div><span class="panel-index">A</span><h3>Coherent orbit</h3></div><div class="panel-tools"><span id="angleReadout">ANGLE —°</span><button id="datasetButton" disabled>Save views</button></div></div>
-            <div class="contact-grid" id="contactGrid"></div>
-            <div class="coherence-bar"><div><span>LOOK CONSISTENCY</span><strong id="coherenceValue">Waiting</strong></div><div class="meter"><i id="coherenceMeter"></i></div><p id="coherenceNote">Identity, clothing, pose, and color stay locked at every angle.</p></div>
-          </section>
-
-          <section class="model-panel" id="modelPanel">
-            <div class="panel-head"><div><span class="panel-index">B</span><h3>Interactive 3D look</h3></div><div class="panel-tools"><button id="logButton" disabled>Build log</button><button class="accent-action" id="downloadButton" disabled>Save model ↓</button></div></div>
-            <div class="viewport" id="viewport">
-              <canvas id="modelCanvas"></canvas>
-              <button class="viewport-lighting-trigger" id="lightRigButton" type="button" aria-controls="lightRig" aria-expanded="false"><i aria-hidden="true"></i><span>Move light</span><small id="lightRigState">Waiting</small></button>
-              <aside class="light-rig hidden unavailable" id="lightRig" aria-label="Directional lighting controls">
-                <div class="light-rig-head"><div><i></i><span>Light direction</span></div><div class="light-rig-actions"><button id="lightResetButton" type="button">Reset</button><button id="lightCloseButton" type="button" aria-label="Close">×</button></div></div>
-                <p class="light-status" id="lightStatus">Lighting unlocks when your model is ready.</p>
-                <div class="light-dome" id="lightDome" role="presentation"><span class="light-axis light-axis-x"></span><span class="light-axis light-axis-y"></span><span class="light-horizon">LIGHT MAP</span><i class="light-handle" id="lightHandle"></i></div>
-                <p class="light-instruction">Drag the glow to move the light</p>
-                <label class="light-control"><span>Direction <output id="lightAzimuthValue">32°</output></span><input id="lightAzimuth" type="range" min="0" max="360" step="1" value="32" /></label>
-                <label class="light-control"><span>Height <output id="lightElevationValue">35°</output></span><input id="lightElevation" type="range" min="0" max="90" step="1" value="35" /></label>
-                <label class="light-control"><span>Brightness <output id="lightIntensityValue">2.8</output></span><input id="lightIntensity" type="range" min="0" max="6" step="0.1" value="2.8" /></label>
-              </aside>
-              <div class="viewport-empty" id="viewportEmpty"><div class="orbital-glyph"><i></i><i></i><span>3D</span></div><strong id="viewportTitle">Your 3D look lands here</strong><p id="viewportCopy">Approve a preview, then rotate and relight the full-color result.</p></div>
-              <div class="viewport-hud"><span id="modelFormat">FULL-COLOR 3D</span><span id="pointCount">WAITING</span><span>DRAG TO ROTATE · SCROLL TO ZOOM</span></div>
-            </div>
-          </section>
-        </section>
       </section>
 
-      <details class="history-block">
-        <summary><span class="history-dot"></span><strong>Recent looks</strong><small>Open archive</small></summary>
-        <div class="history-tools"><button id="refreshHistory" type="button">Refresh ↻</button></div>
-        <div class="history-list" id="historyList"><p class="muted">No looks yet.</p></div>
-      </details>
+      <section class="wardrobe-story">
+        <img src="./assets/clay-wardrobe-v1.png" alt="Clay wardrobe rail with three pink and ivory outfit options" />
+        <div><p class="eyebrow">THE RIGHT OUTFIT, NOT A GUESS</p><h2>A reel can hold<br /><em>more than one look.</em></h2><p>Parallax scans public frames, groups repeated views, and lays out the distinct clothing options. You pick the jacket, dress, trousers, or full look before anything is sent to YouCam.</p><a href="./studio.html">Choose from a post <span>→</span></a></div>
+      </section>
     </main>
 
-    <dialog id="logDialog"><div class="dialog-head"><div><p class="eyebrow">Build details</p><h3>Your 3D process</h3></div><button id="closeLog" aria-label="Close">×</button></div><pre id="logContent">No details yet.</pre></dialog>
-    <div class="toast" id="toast" role="status"></div>
-    <script type="module" src="./app.js?v=20260817-runway-2"></script>
+    <footer class="landing-footer"><a class="brand" href="./"><span class="brand-pixels"><i></i><i></i><i></i><i></i></span><span><strong>PARALLAX</strong><small>POWERED BY YOUCAM</small></span></a><p>Private fitting, clearer choices, tangible results.</p><a href="./studio.html">ENTER STUDIO ↗</a></footer>
   </body>
 </html>

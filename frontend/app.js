@@ -19,7 +19,8 @@ const state = {
   stylePollTimer: null,
   garmentFile: null,
   styleUrls: [],
-  genderMode: localStorage.getItem("parallax_gender_mode") || "female",
+  candidateUrls: [],
+  selectedCandidateId: null,
 };
 
 const authGate = $("#authGate");
@@ -45,8 +46,6 @@ const stylePreview = $("#stylePreview");
 const garmentFrame = $("#garmentFrame");
 const tryonResult = $("#tryonResult");
 const garmentDescription = $("#garmentDescription");
-const providerInput = $("#providerInput");
-const providerStatus = $("#providerStatus");
 const approveStyleButton = $("#approveStyleButton");
 const advancedPanel = $(".advanced-panel");
 const viewCountInput = $("#viewCountInput");
@@ -87,7 +86,14 @@ const lightIntensityValue = $("#lightIntensityValue");
 const logDialog = $("#logDialog");
 const logContent = $("#logContent");
 const toast = $("#toast");
-const genderButtons = [...document.querySelectorAll("[data-gender]")];
+const candidateGrid = $("#candidateGrid");
+const confirmCandidateButton = $("#confirmCandidateButton");
+const candidateChoiceTitle = $("#candidateChoiceTitle");
+const candidateChoiceCopy = $("#candidateChoiceCopy");
+const studioDock = $("#studioDock");
+const dockToggle = $("#dockToggle");
+const pageButtons = [...document.querySelectorAll("[data-page-target]")];
+const pagePanels = [...document.querySelectorAll("[data-page-panel]")];
 const resultTabButtons = [...document.querySelectorAll("[data-result-tab]")];
 
 function notify(message) {
@@ -97,14 +103,17 @@ function notify(message) {
   notify.timer = setTimeout(() => toast.classList.remove("show"), 3200);
 }
 
-function applyGenderMode(mode, announce = false) {
-  state.genderMode = mode === "male" ? "male" : "female";
-  document.body.dataset.theme = state.genderMode;
-  localStorage.setItem("parallax_gender_mode", state.genderMode);
-  genderButtons.forEach((button) => {
-    button.setAttribute("aria-pressed", String(button.dataset.gender === state.genderMode));
-  });
-  if (announce) notify(`${state.genderMode === "male" ? "Blue" : "Pink"} runway activated`);
+function unlockPage(page) {
+  pageButtons.find((button) => button.dataset.pageTarget === page)?.removeAttribute("disabled");
+}
+
+function goToPage(page) {
+  const target = pagePanels.find((panel) => panel.dataset.pagePanel === page);
+  if (!target) return;
+  document.body.dataset.page = page;
+  pagePanels.forEach((panel) => panel.classList.toggle("active", panel === target));
+  pageButtons.forEach((button) => button.classList.toggle("active", button.dataset.pageTarget === page));
+  window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
 function setResultTab(tab) {
@@ -115,30 +124,20 @@ function setResultTab(tab) {
   });
 }
 
-genderButtons.forEach((button) => button.addEventListener("click", () => applyGenderMode(button.dataset.gender, true)));
 resultTabButtons.forEach((button) => button.addEventListener("click", () => setResultTab(button.dataset.resultTab)));
-applyGenderMode(state.genderMode);
-
-async function loadClothingProviders() {
-  try {
-    const response = await apiFetch("/v1/clothing-providers");
-    const providers = await response.json();
-    providerInput.innerHTML = "";
-    providers.forEach((provider) => {
-      const option = document.createElement("option");
-      option.value = provider.id;
-      option.textContent = provider.configured ? provider.label : `${provider.label} · unavailable`;
-      option.disabled = !provider.configured;
-      providerInput.append(option);
-    });
-    const ready = providers.filter((provider) => provider.id !== "auto" && provider.configured);
-    providerStatus.textContent = ready.length
-      ? `${ready.length} fit engine${ready.length === 1 ? "" : "s"} ready`
-      : "No fit engine configured";
-  } catch {
-    providerStatus.textContent = "Fit engine status unavailable";
-  }
-}
+pageButtons.forEach((button) => button.addEventListener("click", () => {
+  if (!button.disabled) goToPage(button.dataset.pageTarget);
+}));
+const dockIsCollapsed = localStorage.getItem("parallax_dock_collapsed") === "true";
+studioDock.classList.toggle("collapsed", dockIsCollapsed);
+document.body.classList.toggle("dock-collapsed", dockIsCollapsed);
+dockToggle.setAttribute("aria-expanded", String(!dockIsCollapsed));
+dockToggle.addEventListener("click", () => {
+  const collapsed = studioDock.classList.toggle("collapsed");
+  document.body.classList.toggle("dock-collapsed", collapsed);
+  dockToggle.setAttribute("aria-expanded", String(!collapsed));
+  localStorage.setItem("parallax_dock_collapsed", String(collapsed));
+});
 
 async function apiFetch(path, options = {}) {
   const headers = new Headers(options.headers || {});
@@ -172,7 +171,6 @@ async function connect(token = tokenInput.value.trim()) {
     authGate.classList.add("hidden");
     connectionButton.classList.add("online");
     connectionText.textContent = "Fitting room live";
-    await loadClothingProviders();
     await loadHistory();
     await loadLatestStyleJob();
   } catch (error) {
@@ -224,7 +222,7 @@ function renderReferences() {
     referenceStrip.append(frame);
   });
   $("#fileCount").textContent = `${state.references.length} / 8`;
-  dropzone.closest(".guided-step").classList.toggle("completed", state.references.length > 0);
+  dropzone.classList.toggle("completed", state.references.length > 0);
   updatePrimaryAction();
 }
 
@@ -250,14 +248,14 @@ function updatePrimaryAction() {
   const ready = state.references.length > 0 && Boolean(instagramUrl.value.trim() || state.garmentFile);
   const busy = state.styleJob && activeStatuses.has(state.styleJob.status);
   stylePreviewButton.disabled = !ready || Boolean(busy);
-  instagramUrl.closest(".guided-step").classList.toggle("completed", Boolean(instagramUrl.value.trim() || state.garmentFile));
 }
 
 function styleHumanStatus(status) {
   return {
     queued: "Getting your outfit ready",
-    downloading_media: "Finding the clearest outfit moment",
-    selecting_garment: "Choosing the best clothing reference",
+    downloading_media: "Reading the public Instagram media",
+    selecting_garment: "Grouping the distinct outfits",
+    awaiting_garment_selection: "Choose which outfit you want",
     uploading_assets: "Preparing your private photos",
     generating_tryon: "Creating your outfit preview",
     complete: "Your outfit preview is ready",
@@ -278,6 +276,53 @@ async function setAuthenticatedImage(image, path) {
   image.src = url;
 }
 
+function clearCandidateUrls() {
+  state.candidateUrls.forEach((url) => URL.revokeObjectURL(url));
+  state.candidateUrls = [];
+}
+
+async function renderCandidateOptions(job) {
+  clearCandidateUrls();
+  state.selectedCandidateId = null;
+  candidateGrid.innerHTML = "";
+  confirmCandidateButton.disabled = true;
+  candidateChoiceTitle.textContent = "Choose one outfit";
+  candidateChoiceCopy.textContent = "YouCam will use only the option you confirm.";
+  const categoryLabels = { upper_body: "Top or jacket", lower_body: "Bottom", full_body: "Full look" };
+  for (const option of job.candidate_options || []) {
+    const card = document.createElement("button");
+    card.type = "button";
+    card.className = "candidate-card";
+    const image = document.createElement("img");
+    image.alt = option.label;
+    const check = document.createElement("span");
+    check.textContent = "✓";
+    const copy = document.createElement("div");
+    const title = document.createElement("strong");
+    title.textContent = option.label;
+    const category = document.createElement("small");
+    category.textContent = categoryLabels[option.garment_category] || "Detected outfit";
+    copy.append(title, category);
+    card.append(image, check, copy);
+    card.addEventListener("click", () => {
+      state.selectedCandidateId = option.id;
+      candidateGrid.querySelectorAll(".candidate-card").forEach((item) => item.classList.toggle("selected", item === card));
+      confirmCandidateButton.disabled = false;
+      candidateChoiceTitle.textContent = option.label;
+      candidateChoiceCopy.textContent = option.description || "This is the outfit YouCam will fit to your photo.";
+    });
+    candidateGrid.append(card);
+    try {
+      const response = await apiFetch(option.image_url);
+      const url = URL.createObjectURL(await response.blob());
+      state.candidateUrls.push(url);
+      image.src = url;
+    } catch {
+      image.alt = `${option.label} preview unavailable`;
+    }
+  }
+}
+
 async function renderStyleJob(job) {
   state.styleJob = job;
   styleProgress.classList.remove("hidden", "failed", "complete");
@@ -285,9 +330,18 @@ async function renderStyleJob(job) {
   styleProgress.classList.toggle("complete", ["complete", "approved"].includes(job.status));
   styleProgressText.textContent = job.error || styleHumanStatus(job.status);
   if (job.status === "failed") {
-    document.body.classList.remove("reviewing-style");
     clearInterval(state.stylePollTimer);
-    stylePreviewButton.querySelector("span").textContent = "Retry outfit preview";
+    stylePreviewButton.querySelector("span").textContent = "Try again";
+    goToPage("create");
+    updatePrimaryAction();
+    return;
+  }
+  if (job.status === "awaiting_garment_selection") {
+    clearInterval(state.stylePollTimer);
+    await renderCandidateOptions(job);
+    unlockPage("select");
+    goToPage("select");
+    stylePreviewButton.querySelector("span").textContent = "Find another outfit";
     updatePrimaryAction();
     return;
   }
@@ -301,11 +355,9 @@ async function renderStyleJob(job) {
   garmentDescription.textContent = job.garment_description;
   stylePreview.classList.remove("hidden");
   advancedPanel.open = false;
-  document.body.classList.remove("setup-mode");
-  document.body.classList.add("reviewing-style");
-  stageEyebrow.textContent = "Your outfit preview";
-  stageTitle.innerHTML = "See your look,<br><em>before it becomes 3D.</em>";
-  stylePreviewButton.querySelector("span").textContent = "Create another preview";
+  unlockPage("preview");
+  goToPage("preview");
+  stylePreviewButton.querySelector("span").textContent = "Find another outfit";
   updatePrimaryAction();
 }
 
@@ -326,7 +378,7 @@ async function loadLatestStyleJob() {
     const latest = jobs[0];
     if (!latest || latest.status === "approved") return;
     await renderStyleJob(latest);
-    if (!["complete", "failed"].includes(latest.status)) {
+    if (!["complete", "failed", "awaiting_garment_selection"].includes(latest.status)) {
       clearInterval(state.stylePollTimer);
       state.stylePollTimer = setInterval(pollStyleJob, 3000);
     }
@@ -341,14 +393,11 @@ stylePreviewButton.addEventListener("click", async () => {
   payload.append("identity_image", state.references[0].file);
   payload.append("instagram_url", instagramUrl.value.trim());
   payload.append("garment_category", garmentCategory.value);
-  payload.append("provider", providerInput.value || "auto");
-  payload.append("gender_mode", state.genderMode);
   if (state.garmentFile) payload.append("garment_image", state.garmentFile);
   stylePreviewButton.disabled = true;
-  stylePreviewButton.querySelector("span").textContent = "Starting your preview...";
+  stylePreviewButton.querySelector("span").textContent = "Reading the source...";
   stylePreview.classList.add("hidden");
   advancedPanel.open = false;
-  document.body.classList.remove("reviewing-style");
   styleProgress.classList.remove("hidden", "failed", "complete");
   styleProgressText.textContent = "Preparing your photos...";
   try {
@@ -357,12 +406,33 @@ stylePreviewButton.addEventListener("click", async () => {
     await renderStyleJob(state.styleJob);
     clearInterval(state.stylePollTimer);
     state.stylePollTimer = setInterval(pollStyleJob, 3000);
-    notify("Your outfit preview is on its way");
+    notify("Reading the outfit source");
   } catch (error) {
     styleProgress.classList.add("failed");
     styleProgressText.textContent = error.message;
-    stylePreviewButton.querySelector("span").textContent = "Preview my look";
+    stylePreviewButton.querySelector("span").textContent = "Find my outfit";
     updatePrimaryAction();
+  }
+});
+
+confirmCandidateButton.addEventListener("click", async () => {
+  if (!state.styleJob || !state.selectedCandidateId) return;
+  const payload = new FormData();
+  payload.append("candidate_id", state.selectedCandidateId);
+  confirmCandidateButton.disabled = true;
+  confirmCandidateButton.querySelector("span").textContent = "Sending to YouCam...";
+  candidateChoiceCopy.textContent = "Your selected outfit is being fitted to your photo now.";
+  try {
+    const response = await apiFetch(`/v1/style-jobs/${state.styleJob.id}/garment-selection`, { method: "POST", body: payload });
+    state.styleJob = await response.json();
+    clearInterval(state.stylePollTimer);
+    state.stylePollTimer = setInterval(pollStyleJob, 3000);
+    notify("Outfit confirmed — YouCam fitting started");
+  } catch (error) {
+    candidateChoiceCopy.textContent = error.message;
+    confirmCandidateButton.disabled = false;
+  } finally {
+    confirmCandidateButton.querySelector("span").textContent = "Use this outfit";
   }
 });
 
@@ -379,7 +449,6 @@ approveStyleButton.addEventListener("click", async () => {
     const pipeline = await response.json();
     promptInput.value = pipeline.prompt;
     stylePreview.classList.add("hidden");
-    document.body.classList.remove("reviewing-style");
     selectPipeline(pipeline);
     notify("Look approved — creating 12 consistent views");
     await loadHistory();
@@ -481,14 +550,14 @@ async function loadViewImage(id, index, frame) {
 }
 
 function selectPipeline(pipeline) {
-  document.body.classList.remove("setup-mode");
-  document.body.classList.remove("reviewing-style");
   stylePreview.classList.add("hidden");
   state.pipeline = pipeline;
   state.modelZip = null;
   state.renderedModelId = null;
   setResultTab(pipeline.status === "complete" ? "model" : "angles");
   clearInterval(state.pollTimer);
+  unlockPage("build");
+  goToPage("build");
   renderPipeline(pipeline);
   state.pollTimer = setInterval(pollPipeline, 4000);
 }
