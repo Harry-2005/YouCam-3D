@@ -89,6 +89,12 @@ YOUCAM_API_KEY_FILE = Path(
     os.getenv("YOUCAM_API_KEY_FILE", "/opt/nerfstudio-api/.youcam-api-key")
 )
 YOUCAM_TASK_TIMEOUT = int(os.getenv("YOUCAM_TASK_TIMEOUT", "420"))
+CLOTHING_PROVIDER_ORDER = [
+    item.strip()
+    for item in os.getenv("CLOTHING_PROVIDER_ORDER", "youcam").split(",")
+    if item.strip()
+]
+CLOTHING_WEBHOOK_PROVIDERS_JSON = os.getenv("CLOTHING_WEBHOOK_PROVIDERS_JSON", "[]")
 STYLE_MAX_MEDIA_BYTES = int(os.getenv("STYLE_MAX_MEDIA_BYTES", str(100 * 1024**2)))
 INSTAGRAM_HOSTS = {"instagram.com", "www.instagram.com", "instagr.am", "www.instagr.am"}
 logger = logging.getLogger("nerfstudio-api")
@@ -176,6 +182,9 @@ class StyleJob(BaseModel):
     result_ready: bool = False
     pipeline_id: str | None = None
     error: str | None = None
+    provider_requested: str = "auto"
+    provider_used: str = ""
+    gender_mode: Literal["female", "male"] = "female"
 
 
 def now() -> str:
@@ -563,6 +572,110 @@ def load_youcam_api_key() -> str:
     return match.group(0) if match else ""
 
 
+def clothing_provider_specs() -> dict[str, dict]:
+    """Return public-safe provider capabilities without exposing credentials.
+
+    Additional vendors are connected through a tiny webhook contract. This keeps
+    vendor payloads out of the product UI and lets deployments add or remove
+    clothing engines without changing application code.
+    """
+    specs: dict[str, dict] = {
+        "youcam": {
+            "id": "youcam",
+            "label": "YouCam Clothes v3",
+            "kind": "native",
+            "configured": bool(load_youcam_api_key()),
+        }
+    }
+    try:
+        configured = json.loads(CLOTHING_WEBHOOK_PROVIDERS_JSON)
+    except json.JSONDecodeError:
+        logger.warning("CLOTHING_WEBHOOK_PROVIDERS_JSON is invalid; ignoring webhook providers")
+        configured = []
+    if not isinstance(configured, list):
+        configured = []
+    for item in configured:
+        if not isinstance(item, dict):
+            continue
+        provider_id = re.sub(r"[^a-z0-9_-]", "", str(item.get("id", "")).lower())
+        endpoint = str(item.get("endpoint", "")).strip()
+        token_env = str(item.get("token_env", "")).strip()
+        if not provider_id or not endpoint.startswith("https://") or not token_env:
+            continue
+        try:
+            timeout = min(900, max(30, int(item.get("timeout", YOUCAM_TASK_TIMEOUT))))
+        except (TypeError, ValueError):
+            timeout = YOUCAM_TASK_TIMEOUT
+        specs[provider_id] = {
+            "id": provider_id,
+            "label": str(item.get("label") or provider_id.replace("-", " ").title())[:80],
+            "kind": "webhook",
+            "configured": bool(os.getenv(token_env, "").strip()),
+            "endpoint": endpoint,
+            "token_env": token_env,
+            "timeout": timeout,
+        }
+    return specs
+
+
+def public_clothing_providers() -> list[dict]:
+    specs = clothing_provider_specs()
+    ordered_ids = list(dict.fromkeys(CLOTHING_PROVIDER_ORDER + list(specs)))
+    providers = [
+        {
+            "id": provider_id,
+            "label": specs[provider_id]["label"],
+            "kind": specs[provider_id]["kind"],
+            "configured": specs[provider_id]["configured"],
+        }
+        for provider_id in ordered_ids
+        if provider_id in specs
+    ]
+    return [
+        {
+            "id": "auto",
+            "label": "Auto · best available",
+            "kind": "router",
+            "configured": any(provider["configured"] for provider in providers),
+        },
+        *providers,
+    ]
+
+
+def resolve_clothing_provider(requested: str) -> dict:
+    specs = clothing_provider_specs()
+    if requested != "auto":
+        selected = specs.get(requested)
+        if not selected:
+            raise RuntimeError(f"Unknown clothing provider: {requested}")
+        if not selected["configured"]:
+            raise RuntimeError(f"{selected['label']} is not configured")
+        return selected
+    for provider_id in CLOTHING_PROVIDER_ORDER:
+        selected = specs.get(provider_id)
+        if selected and selected["configured"]:
+            return selected
+    for selected in specs.values():
+        if selected["configured"]:
+            return selected
+    raise RuntimeError("No clothing provider is configured")
+
+
+def clothing_provider_candidates(requested: str) -> list[dict]:
+    if requested != "auto":
+        return [resolve_clothing_provider(requested)]
+    specs = clothing_provider_specs()
+    ordered_ids = list(dict.fromkeys(CLOTHING_PROVIDER_ORDER + list(specs)))
+    candidates = [
+        specs[provider_id]
+        for provider_id in ordered_ids
+        if provider_id in specs and specs[provider_id]["configured"]
+    ]
+    if not candidates:
+        raise RuntimeError("No clothing provider is configured")
+    return candidates
+
+
 def append_style_log(style_id: str, message: str) -> None:
     with (STYLE_ROOT / style_id / "style.log").open("a", encoding="utf-8") as log:
         log.write(f"[{now()}] {message}\n")
@@ -848,6 +961,151 @@ def download_remote_image(url: str, destination: Path) -> None:
     normalize_image_to_jpeg(data, destination)
 
 
+def multipart_payload(fields: dict[str, str], files: dict[str, Path]) -> tuple[bytes, str]:
+    boundary = f"parallax-{secrets.token_hex(18)}"
+    chunks: list[bytes] = []
+    for name, value in fields.items():
+        chunks.extend(
+            [
+                f"--{boundary}\r\n".encode(),
+                f'Content-Disposition: form-data; name="{name}"\r\n\r\n'.encode(),
+                str(value).encode("utf-8"),
+                b"\r\n",
+            ]
+        )
+    for name, path in files.items():
+        chunks.extend(
+            [
+                f"--{boundary}\r\n".encode(),
+                (
+                    f'Content-Disposition: form-data; name="{name}"; '
+                    f'filename="{path.name}"\r\n'
+                ).encode(),
+                b"Content-Type: image/jpeg\r\n\r\n",
+                path.read_bytes(),
+                b"\r\n",
+            ]
+        )
+    chunks.append(f"--{boundary}--\r\n".encode())
+    return b"".join(chunks), f"multipart/form-data; boundary={boundary}"
+
+
+def find_provider_result_url(payload: object) -> str:
+    if isinstance(payload, str) and payload.startswith("https://"):
+        return payload
+    if isinstance(payload, dict):
+        for key in ("result_url", "output_url", "image_url", "url"):
+            value = payload.get(key)
+            if isinstance(value, str) and value.startswith("https://"):
+                return value
+        for key in ("result", "output", "data", "images"):
+            found = find_provider_result_url(payload.get(key))
+            if found:
+                return found
+    if isinstance(payload, list):
+        for item in payload:
+            found = find_provider_result_url(item)
+            if found:
+                return found
+    return ""
+
+
+def run_webhook_clothing_provider(
+    spec: dict,
+    identity_path: Path,
+    garment_path: Path,
+    category: str,
+    gender_mode: str,
+    destination: Path,
+) -> None:
+    token = os.getenv(spec["token_env"], "").strip()
+    body, content_type = multipart_payload(
+        {"garment_category": category, "gender_mode": gender_mode},
+        {"identity_image": identity_path, "garment_image": garment_path},
+    )
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Accept": "application/json, image/*",
+        "Content-Type": content_type,
+        "User-Agent": "Parallax/1.0",
+    }
+    request = urllib.request.Request(spec["endpoint"], data=body, method="POST", headers=headers)
+    try:
+        with urllib.request.urlopen(request, timeout=spec["timeout"]) as response:
+            response_type = response.headers.get_content_type()
+            raw = response.read(10 * 1024**2 + 1)
+    except urllib.error.HTTPError as exc:
+        detail = exc.read(2048).decode("utf-8", errors="replace")
+        raise RuntimeError(f"{spec['label']} request failed: HTTP {exc.code} {detail[:240]}") from exc
+    if len(raw) > 10 * 1024**2:
+        raise RuntimeError(f"{spec['label']} result exceeded 10 MB")
+    if response_type.startswith("image/"):
+        normalize_image_to_jpeg(raw, destination)
+        return
+    try:
+        payload = json.loads(raw.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise RuntimeError(f"{spec['label']} returned an unsupported response") from exc
+
+    result_url = find_provider_result_url(payload)
+    status_url = str(payload.get("status_url", "")) if isinstance(payload, dict) else ""
+    if not result_url and status_url.startswith("https://"):
+        deadline = time.monotonic() + spec["timeout"]
+        while time.monotonic() < deadline:
+            poll_request = urllib.request.Request(
+                status_url,
+                headers={"Authorization": f"Bearer {token}", "Accept": "application/json"},
+            )
+            with urllib.request.urlopen(poll_request, timeout=60) as response:
+                payload = json.loads(response.read().decode("utf-8"))
+            result_url = find_provider_result_url(payload)
+            status = str(payload.get("status", "")).lower() if isinstance(payload, dict) else ""
+            if result_url:
+                break
+            if status in {"failed", "error", "cancelled"}:
+                raise RuntimeError(f"{spec['label']} virtual try-on failed")
+            time.sleep(3)
+    if not result_url:
+        raise RuntimeError(f"{spec['label']} returned no result image")
+    download_remote_image(result_url, destination)
+
+
+def run_youcam_clothing_provider(
+    identity_path: Path, garment_path: Path, category: str, destination: Path
+) -> None:
+    source_file_id = youcam_upload(identity_path)
+    garment_file_id = youcam_upload(garment_path)
+    task = youcam_json(
+        "POST",
+        "/s2s/v2.0/task/cloth-v3",
+        {
+            "src_file_id": source_file_id,
+            "ref_file_id": garment_file_id,
+            "garment_category": category,
+        },
+    )
+    task_id = task.get("task_id")
+    if not task_id:
+        raise RuntimeError("YouCam did not return a task ID")
+    deadline = time.monotonic() + YOUCAM_TASK_TIMEOUT
+    result_url = ""
+    while time.monotonic() < deadline:
+        result = youcam_json(
+            "GET", f"/s2s/v2.0/task/cloth-v3/{urllib.parse.quote(task_id, safe='')}"
+        )
+        task_status = result.get("task_status")
+        if task_status == "success":
+            result_url = str((result.get("results") or {}).get("url") or "")
+            break
+        if task_status in {"error", "failed"}:
+            error = result.get("error") or "virtual try-on failed"
+            raise RuntimeError(f"YouCam Clothes v3 failed: {error}")
+        time.sleep(3)
+    if not result_url:
+        raise TimeoutError("YouCam Clothes v3 timed out")
+    download_remote_image(result_url, destination)
+
+
 def execute_style_job(style_id: str) -> None:
     directory = STYLE_ROOT / style_id
     metadata = read_style(style_id)
@@ -886,40 +1144,38 @@ def execute_style_job(style_id: str) -> None:
         )
         append_style_log(style_id, f"Selected garment reference and classified {category}")
 
+        providers = clothing_provider_candidates(metadata.get("provider_requested", "auto"))
         write_style(style_id, status="uploading_assets")
-        source_file_id = youcam_upload(directory / "identity.jpg")
-        garment_file_id = youcam_upload(garment_path)
-        task = youcam_json(
-            "POST",
-            "/s2s/v2.0/task/cloth-v3",
-            {
-                "src_file_id": source_file_id,
-                "ref_file_id": garment_file_id,
-                "garment_category": category,
-            },
-        )
-        task_id = task.get("task_id")
-        if not task_id:
-            raise RuntimeError("YouCam did not return a task ID")
-        write_style(style_id, status="generating_tryon")
-        append_style_log(style_id, "YouCam Clothes v3 virtual try-on started")
-        deadline = time.monotonic() + YOUCAM_TASK_TIMEOUT
-        result_url = ""
-        while time.monotonic() < deadline:
-            result = youcam_json(
-                "GET", f"/s2s/v2.0/task/cloth-v3/{urllib.parse.quote(task_id, safe='')}"
-            )
-            task_status = result.get("task_status")
-            if task_status == "success":
-                result_url = str((result.get("results") or {}).get("url") or "")
+        last_provider_error: Exception | None = None
+        for index, provider in enumerate(providers):
+            write_style(style_id, status="generating_tryon", provider_used=provider["id"])
+            append_style_log(style_id, f"Routing virtual try-on through {provider['label']}")
+            try:
+                if provider["kind"] == "native":
+                    run_youcam_clothing_provider(
+                        directory / "identity.jpg", garment_path, category, directory / "result.jpg"
+                    )
+                else:
+                    run_webhook_clothing_provider(
+                        provider,
+                        directory / "identity.jpg",
+                        garment_path,
+                        category,
+                        metadata.get("gender_mode", "female"),
+                        directory / "result.jpg",
+                    )
+                last_provider_error = None
                 break
-            if task_status in {"error", "failed"}:
-                error = result.get("error") or "virtual try-on failed"
-                raise RuntimeError(f"YouCam Clothes v3 failed: {error}")
-            time.sleep(3)
-        if not result_url:
-            raise TimeoutError("YouCam Clothes v3 timed out")
-        download_remote_image(result_url, directory / "result.jpg")
+            except Exception as exc:
+                last_provider_error = exc
+                if metadata.get("provider_requested", "auto") != "auto" or index == len(providers) - 1:
+                    raise
+                append_style_log(
+                    style_id,
+                    f"{provider['label']} was unavailable; trying the next configured fit engine",
+                )
+        if last_provider_error is not None:
+            raise last_provider_error
         write_style(style_id, status="complete", result_ready=True)
         append_style_log(style_id, "Virtual try-on preview is ready for approval")
     except Exception as exc:
@@ -2341,6 +2597,7 @@ def api_info() -> dict:
             "create_preview": "POST /v1/style-jobs",
             "status": "GET /v1/style-jobs/{id}",
             "approve_for_3d": "POST /v1/style-jobs/{id}/approve",
+            "providers": "GET /v1/clothing-providers",
         },
     }
 
@@ -2386,6 +2643,11 @@ def list_style_jobs() -> list[dict]:
     return jobs
 
 
+@app.get("/v1/clothing-providers", dependencies=[Depends(authenticate)])
+def list_clothing_providers() -> list[dict]:
+    return public_clothing_providers()
+
+
 @app.post(
     "/v1/style-jobs",
     response_model=StyleJob,
@@ -2397,9 +2659,17 @@ async def create_style_job(
     instagram_url: Annotated[str, Form()] = "",
     garment_image: Annotated[UploadFile | None, File(description="Optional garment fallback")] = None,
     garment_category: Annotated[str, Form()] = "auto",
+    provider: Annotated[str, Form()] = "auto",
+    gender_mode: Annotated[str, Form()] = "female",
 ) -> dict:
     if garment_category not in {"auto", "upper_body", "lower_body", "full_body"}:
         raise HTTPException(422, "Invalid garment category")
+    if gender_mode not in {"female", "male"}:
+        raise HTTPException(422, "Gender mode must be female or male")
+    try:
+        resolve_clothing_provider(provider)
+    except RuntimeError as exc:
+        raise HTTPException(422, str(exc)) from exc
     if not instagram_url.strip() and garment_image is None:
         raise HTTPException(422, "Provide an Instagram reel/post URL or a garment image")
     if instagram_url.strip():
@@ -2419,13 +2689,13 @@ async def create_style_job(
     try:
         identity = await identity_image.read(10 * 1024**2 + 1)
         if len(identity) > 10 * 1024**2:
-            raise HTTPException(413, "Identity photo exceeds YouCam's 10 MB limit")
+            raise HTTPException(413, "Identity photo exceeds the 10 MB limit")
         normalize_image_to_jpeg(identity, directory / "identity.jpg")
         has_fallback = garment_image is not None
         if garment_image:
             garment = await garment_image.read(10 * 1024**2 + 1)
             if len(garment) > 10 * 1024**2:
-                raise HTTPException(413, "Garment image exceeds YouCam's 10 MB limit")
+                raise HTTPException(413, "Garment image exceeds the 10 MB limit")
             normalize_image_to_jpeg(garment, directory / "garment-upload.jpg")
         timestamp = now()
         metadata = {
@@ -2442,6 +2712,9 @@ async def create_style_job(
             "result_ready": False,
             "pipeline_id": None,
             "error": None,
+            "provider_requested": provider,
+            "provider_used": "",
+            "gender_mode": gender_mode,
         }
         (directory / "style.json").write_text(json.dumps(metadata, indent=2))
         append_style_log(style_id, "Fashion transfer queued")
@@ -2478,7 +2751,7 @@ def get_style_result(style_id: str) -> FileResponse:
     path = style_dir(style_id) / "result.jpg"
     if not metadata.get("result_ready") or not path.is_file():
         raise HTTPException(409, "Virtual try-on result is not ready")
-    return FileResponse(path, media_type="image/jpeg", filename="youcam-tryon.jpg")
+    return FileResponse(path, media_type="image/jpeg", filename="virtual-tryon.jpg")
 
 
 @app.delete("/v1/style-jobs/{style_id}", dependencies=[Depends(authenticate)])
