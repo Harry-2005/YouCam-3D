@@ -9,7 +9,7 @@ The canonical project overview and API examples live in the [root README](../REA
 | `/opt/nerfstudio-api` | Application, virtual environment, frontend, and protected configuration |
 | `/var/lib/nerfstudio-api/jobs` | Nerfstudio worker jobs |
 | `/var/lib/nerfstudio-api/pipelines` | Twelve-view pipelines and final artifacts |
-| `/var/lib/nerfstudio-api/style-jobs` | Provider-routed outfit previews |
+| `/var/lib/nerfstudio-api/style-jobs` | YouCam outfit previews and detected garment choices |
 | `/var/lib/nerfstudio-api/cache` | Shared model cache |
 
 The FastAPI process runs as `nerfstudio-api` on `127.0.0.1:8000`. Caddy terminates TLS and proxies public traffic. Reconstruction commands run in an NVIDIA-enabled Nerfstudio container; relightable mesh jobs use the dedicated Hunyuan environment.
@@ -35,19 +35,18 @@ sudo install -m 0600 /secure/path/youcam-creds.txt \
 sudo systemctl restart nerfstudio-api caddy
 ```
 
-## Add clothing providers
+## Instagram media access
 
-YouCam Clothes v3 is the native provider. Extra clothing APIs can be connected without frontend changes by exposing the provider webhook contract and adding a server-side definition:
+The fitting flow tries `yt-dlp`, then `gallery-dl`, then the public Open Graph preview. When a reel contains distinct looks, the style job pauses in `awaiting_garment_selection` until the user confirms one candidate. Private or login-gated posts should include an uploaded garment fallback.
+
+For access you are permitted to automate, an optional Netscape-format cookie file can be installed server-side and referenced without exposing it to the browser:
 
 ```bash
-CLOTHING_PROVIDER_ORDER=youcam,studio-fit
-CLOTHING_WEBHOOK_PROVIDERS_JSON='[{"id":"studio-fit","label":"Studio Fit","endpoint":"https://gateway.example.com/v1/try-on","token_env":"STUDIO_FIT_TOKEN"}]'
-STUDIO_FIT_TOKEN=replace-with-secret
+sudo install -m 0600 /secure/path/instagram-cookies.txt \
+  /opt/nerfstudio-api/.instagram-cookies.txt
+echo 'INSTAGRAM_COOKIES_FILE=/opt/nerfstudio-api/.instagram-cookies.txt' \
+  | sudo tee -a /opt/nerfstudio-api/.env
 ```
-
-The gateway receives a multipart `POST` with `identity_image`, `garment_image`, `garment_category`, and `gender_mode`. It may return an image directly, JSON containing `result_url`, `output_url`, or `image_url`, or a `status_url` that eventually returns one of those fields. Endpoints must use HTTPS and tokens remain server-side.
-
-The dashboard discovers configured engines through `GET /v1/clothing-providers`. Its **Auto · best available** option follows `CLOTHING_PROVIDER_ORDER` and falls through to the next configured engine if one is unavailable, so adding providers does not add another step to the user flow.
 
 ## Validate
 

@@ -18,7 +18,7 @@
 
 <br />
 
-**YouCam 3D** is an image-first fitting room and GPU reconstruction service. A user uploads a person photo, supplies an outfit image or public Instagram URL, approves a routed virtual try-on, and receives a coherent twelve-view capture plus an interactive 3D result.
+**YouCam 3D** is an image-first fitting room and GPU reconstruction service. A user uploads a person photo, supplies an outfit image or public Instagram URL, chooses between any distinct looks found in the post, approves a YouCam virtual try-on, and receives a coherent twelve-view capture plus an interactive 3D result.
 
 [Architecture](#system-architecture) · [Quick start](#quick-start) · [API](#api-workflow) · [Configuration](#configuration-flags) · [Contributing](#contributing)
 
@@ -30,8 +30,8 @@
 
 | Stage | Result |
 | --- | --- |
-| **Outfit understanding** | Extracts a useful garment frame from an image, post, or reel. |
-| **Routed virtual try-on** | Selects the best configured clothing API and applies the outfit while retaining identity. |
+| **Outfit understanding** | Extracts public media, groups repeated frames, and presents distinct garments for selection. |
+| **YouCam virtual try-on** | Applies the confirmed outfit through YouCam Clothes v3 while retaining identity. |
 | **Subject locking** | Freezes identity, pose, garment construction, colors, and accessories. |
 | **Coherent orbit** | Builds twelve calibrated views at 30° azimuth intervals. |
 | **Quality layer** | Audits identity, camera progression, pose drift, and reconstruction fitness. |
@@ -39,7 +39,7 @@
 | **Web viewer** | Displays the result with orbit controls, downloads, history, and mesh lighting. |
 
 > [!IMPORTANT]
-> **Provider clarity:** **YouCam Clothes v3** remains the native default. A provider registry can route the same fitting-room request to additional server-side clothing APIs through a documented webhook contract. Provider credentials and vendor payloads never reach the browser.
+> **API clarity:** Customer-facing outfit generation uses **YouCam Clothes v3**. The credential stays server-side and no vendor token reaches the browser.
 
 ## Why this pipeline
 
@@ -84,11 +84,9 @@ flowchart LR
     Social --> API
     Garment --> API
 
-    API --> FitRouter{Clothing provider router}
-    FitRouter --> YC[YouCam Clothes v3]
-    FitRouter --> Webhooks[Configured vendor webhooks]
+    API --> Choices[Distinct outfit choices]
+    Choices --> YC[YouCam Clothes v3]
     YC --> Preview[Approved outfit preview]
-    Webhooks --> Preview
     Preview --> Lock[Canonical subject lock]
     Lock --> Orbit[12-view closed orbit]
     Orbit --> Audit[Coherence and pose audit]
@@ -111,7 +109,7 @@ flowchart LR
     classDef primary fill:#ffe4ee,stroke:#f43f7a,color:#222;
     classDef ai fill:#f0ecff,stroke:#7c5cfa,color:#222;
     classDef compute fill:#eef9ff,stroke:#49a9d8,color:#222;
-    class YC,Webhooks,Preview primary;
+    class YC,Choices,Preview primary;
     class Lock,Orbit,Audit ai;
     class Splat,Mesh,GPU compute;
 ```
@@ -123,17 +121,17 @@ sequenceDiagram
     actor U as User
     participant D as Dashboard
     participant A as FastAPI
-    participant R as Clothing provider router
-    participant P as Selected clothing API
+    participant Y as YouCam Clothes v3
     participant O as Orbit + audit layer
     participant G as A100 reconstruction worker
     participant V as 3D viewer
 
     U->>D: Upload identity + outfit source
     D->>A: Create style job
-    A->>R: Resolve auto or selected provider
-    R->>P: Upload protected assets
-    P-->>A: Virtual try-on result
+    A-->>D: Distinct outfit options (when needed)
+    U->>D: Confirm one outfit
+    A->>Y: Upload protected identity + garment
+    Y-->>A: Virtual try-on result
     A-->>D: Outfit preview
     U->>D: Approve look
     D->>A: Queue 3D pipeline
@@ -149,7 +147,7 @@ sequenceDiagram
 
 | Layer | Technology | Purpose |
 | --- | --- | --- |
-| Fashion imaging | **YouCam Clothes v3 + provider webhooks** | Auto-routed virtual try-on and garment transfer |
+| Fashion imaging | **YouCam Clothes v3** | Identity-aware virtual try-on and garment transfer |
 | API | **FastAPI**, Pydantic, Uvicorn | Authenticated jobs, uploads, callbacks, polling, artifacts |
 | Media ingestion | **yt-dlp**, gallery-dl, FFmpeg | Public post/reel extraction and frame selection |
 | Orbit orchestration | Google Cloud generative media + Cloud Storage | Canonical subject locking and camera motion |
@@ -169,7 +167,7 @@ sequenceDiagram
 - Docker Engine and NVIDIA Container Toolkit
 - Python 3.10+
 - Google Cloud service account attached to the host
-- At least one configured clothing provider; YouCam Clothes v3 is the native default
+- YouCam Clothes v3 API credentials
 - A DNS name for TLS, or a trusted reverse proxy
 
 ### 1. Clone
@@ -241,6 +239,16 @@ curl -X POST "$BASE_URL/v1/style-jobs" \
 
 Poll `GET /v1/style-jobs/{style_id}`. When it is complete, review `/garment` and `/result`, then approve it:
 
+For a public Instagram post or reel, send `instagram_url` instead of `garment_image`. If the job reaches `awaiting_garment_selection`, read `candidate_options`, preview each authenticated `image_url`, and confirm one:
+
+```bash
+curl -X POST "$BASE_URL/v1/style-jobs/$STYLE_ID/garment-selection" \
+  -H "Authorization: Bearer $API_TOKEN" \
+  -F "candidate_id=look-1"
+```
+
+Public extraction tries direct media, gallery media, and the post's public preview image. Private, login-gated, or region-blocked posts should include an uploaded garment image as the fallback.
+
 ```bash
 curl -X POST "$BASE_URL/v1/style-jobs/$STYLE_ID/approve" \
   -H "Authorization: Bearer $API_TOKEN" \
@@ -272,8 +280,7 @@ Use `POST /v1/pipelines/{id}/retrain` with `method=splatfacto`, `nerfacto`, or `
 | `PIPELINE_STABILIZATION_PASSES` | `2` | Maximum pose-repair passes |
 | `PIPELINE_STABILIZATION_WORKERS` | `4` | Concurrent repaired-view workers |
 | `YOUCAM_TASK_TIMEOUT` | `420` | YouCam polling timeout in seconds |
-| `CLOTHING_PROVIDER_ORDER` | `youcam` | Comma-separated automatic routing priority |
-| `CLOTHING_WEBHOOK_PROVIDERS_JSON` | `[]` | Additional clothing-provider gateway definitions |
+| `INSTAGRAM_COOKIES_FILE` | empty | Optional server-side cookie file for permitted Instagram access |
 | `NERFSTUDIO_IMAGE` | `ghcr.io/nerfstudio-project/nerfstudio:latest` | GPU worker container |
 
 ### Reconstruction profiles
