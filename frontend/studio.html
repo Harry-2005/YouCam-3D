@@ -8,25 +8,15 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,600;12..96,700;12..96,800&family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="./styles.css?v=20260817-professional-4" />
+    <link rel="stylesheet" href="./styles.css?v=20260817-public-5" />
     <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/","@sparkjsdev/spark":"https://sparkjs.dev/releases/spark/2.1.0/spark.module.js"}}</script>
   </head>
   <body class="studio-body setup-mode" data-page="create" data-result-tab="angles">
     <div class="studio-radiance" aria-hidden="true"></div>
 
-    <div class="auth-gate" id="authGate">
-      <div class="auth-card">
-        <span class="brand-pixels"><i></i><i></i><i></i><i></i></span>
-        <p class="eyebrow">SECURE FITTING ROOM</p><h1>Welcome to<br /><em>your wardrobe.</em></h1>
-        <p class="auth-copy">Enter your access key to continue. Your credential remains stored in this browser.</p>
-        <label class="field auth-field"><span>Access key</span><input id="tokenInput" type="password" autocomplete="current-password" placeholder="••••••••••••••••" /></label>
-        <button class="button button-primary auth-button" id="connectButton"><span>Open fitting room</span><b>→</b></button><p class="form-error" id="authError"></p>
-      </div>
-    </div>
-
     <header class="studio-topbar">
       <a class="brand" href="./" aria-label="Parallax home"><span class="brand-pixels"><i></i><i></i><i></i><i></i></span><span><strong>PARALLAX</strong><small>POWERED BY YOUCAM</small></span></a>
-      <div class="studio-session"><span class="youcam-pill"><i></i> YOUCAM VIRTUAL TRY-ON</span><button class="connection" id="connectionButton"><i></i><span id="connectionText">Secure access</span></button></div>
+      <div class="studio-session"><span class="youcam-pill"><i></i> YOUCAM VIRTUAL TRY-ON</span></div>
     </header>
 
     <aside class="studio-dock" id="studioDock" aria-label="Studio navigation">
@@ -109,6 +99,6 @@
     </main>
 
     <dialog id="logDialog"><div class="dialog-head"><div><p class="eyebrow">CREATION REPORT</p><h3>3D processing details</h3></div><button id="closeLog" aria-label="Close">×</button></div><pre id="logContent">Processing information will appear here.</pre></dialog><div class="toast" id="toast" role="status"></div>
-    <script type="module" src="./app.js?v=20260817-professional-4"></script>
+    <script type="module" src="./app.js?v=20260817-public-5"></script>
   </body>
 </html>

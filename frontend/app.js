@@ -8,7 +8,6 @@ import { unzipSync } from "https://cdn.jsdelivr.net/npm/fflate@0.8.2/esm/browser
 
 const $ = (selector) => document.querySelector(selector);
 const state = {
-  token: localStorage.getItem("parallax_token") || "",
   references: [],
   pipeline: null,
   pollTimer: null,
@@ -23,12 +22,6 @@ const state = {
   selectedCandidateId: null,
 };
 
-const authGate = $("#authGate");
-const tokenInput = $("#tokenInput");
-const connectButton = $("#connectButton");
-const authError = $("#authError");
-const connectionButton = $("#connectionButton");
-const connectionText = $("#connectionText");
 const form = $("#pipelineForm");
 const referenceInput = $("#referenceInput");
 const referenceStrip = $("#referenceStrip");
@@ -105,9 +98,6 @@ function notify(message) {
 
 function customerMessage(error, fallback = "We could not complete this request. Please try again.") {
   const message = String(error?.message || error || "").toLowerCase();
-  if (message.includes("401") || message.includes("403") || message.includes("access key") || message.includes("unauthorized") || message.includes("forbidden")) {
-    return "Your access key could not be verified. Check the key and try again.";
-  }
   if (message.includes("instagram") || message.includes("cookie") || message.includes("private post") || message.includes("media download")) {
     return "We could not access that Instagram post. Confirm that it is public or upload an outfit image.";
   }
@@ -154,14 +144,7 @@ dockToggle.addEventListener("click", () => {
 });
 
 async function apiFetch(path, options = {}) {
-  const headers = new Headers(options.headers || {});
-  if (state.token) headers.set("Authorization", `Bearer ${state.token}`);
-  const response = await fetch(path, { ...options, headers });
-  if (response.status === 401 || response.status === 403) {
-    authGate.classList.remove("hidden");
-    connectionButton.classList.remove("online");
-    connectionText.textContent = "Secure access";
-  }
+  const response = await fetch(path, options);
   if (!response.ok) {
     let message = `${response.status} ${response.statusText}`;
     try {
@@ -172,38 +155,6 @@ async function apiFetch(path, options = {}) {
   }
   return response;
 }
-
-async function connect(token = tokenInput.value.trim()) {
-  authError.textContent = "";
-  if (!token) return (authError.textContent = "Your access key is required.");
-  connectButton.disabled = true;
-  connectButton.querySelector("span").textContent = "Verifying access...";
-  state.token = token;
-  try {
-    await apiFetch("/v1");
-    localStorage.setItem("parallax_token", token);
-    authGate.classList.add("hidden");
-    connectionButton.classList.add("online");
-    connectionText.textContent = "Connected";
-    await loadHistory();
-    await loadLatestStyleJob();
-  } catch (error) {
-    authError.textContent = customerMessage(error, "Your access key could not be verified. Check the key and try again.");
-    state.token = "";
-  } finally {
-    connectButton.disabled = false;
-    connectButton.querySelector("span").textContent = "Open fitting room";
-  }
-}
-
-connectButton.addEventListener("click", () => connect());
-tokenInput.addEventListener("keydown", (event) => { if (event.key === "Enter") connect(); });
-connectionButton.addEventListener("click", () => {
-  localStorage.removeItem("parallax_token");
-  state.token = "";
-  tokenInput.value = "";
-  authGate.classList.remove("hidden");
-});
 
 function addFiles(fileList) {
   const supported = new Set(["image/png", "image/jpeg", "image/webp", "image/heic", "image/heif"]);
@@ -648,7 +599,7 @@ async function loadHistory() {
 
 $("#refreshHistory").addEventListener("click", loadHistory);
 
-async function authenticatedDownload(path, filename) {
+async function downloadFile(path, filename) {
   const response = await apiFetch(path);
   const blob = await response.blob();
   const link = document.createElement("a");
@@ -656,8 +607,8 @@ async function authenticatedDownload(path, filename) {
   setTimeout(() => URL.revokeObjectURL(link.href), 2000);
 }
 
-datasetButton.addEventListener("click", () => state.pipeline && authenticatedDownload(`/v1/pipelines/${state.pipeline.id}/dataset`, `${state.pipeline.id}-dataset.zip`));
-downloadButton.addEventListener("click", () => state.pipeline && authenticatedDownload(`/v1/pipelines/${state.pipeline.id}/model`, `${state.pipeline.id}-model.zip`));
+datasetButton.addEventListener("click", () => state.pipeline && downloadFile(`/v1/pipelines/${state.pipeline.id}/dataset`, `${state.pipeline.id}-dataset.zip`));
+downloadButton.addEventListener("click", () => state.pipeline && downloadFile(`/v1/pipelines/${state.pipeline.id}/model`, `${state.pipeline.id}-model.zip`));
 logButton.addEventListener("click", async () => {
   if (!state.pipeline) return;
   logDialog.showModal(); logContent.textContent = "Preparing the creation report...";
@@ -928,5 +879,5 @@ async function loadModel(id) {
 }
 
 renderContactSheet();
-if (state.token) { tokenInput.value = state.token; connect(state.token); }
-else { connectionText.textContent = "Secure access"; }
+loadHistory();
+loadLatestStyleJob();
