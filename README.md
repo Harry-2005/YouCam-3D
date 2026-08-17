@@ -202,7 +202,7 @@ sudo systemctl restart nerfstudio-api
 At minimum, review these values:
 
 ```dotenv
-API_KEY=generate-a-long-random-value
+API_AUTH_REQUIRED=false
 DATA_ROOT=/var/lib/nerfstudio-api/jobs
 CACHE_ROOT=/var/lib/nerfstudio-api/cache
 PIPELINE_ROOT=/var/lib/nerfstudio-api/pipelines
@@ -221,17 +221,16 @@ sudo systemctl status nerfstudio-api caddy
 nvidia-smi
 ```
 
-Open `https://your-domain.example/dashboard/`, enter the generated bearer token, and create a look.
+Open `https://your-domain.example/dashboard/` and create a look. The hosted studio does not require an access key.
 
 ## API workflow
 
-All non-health routes require `Authorization: Bearer <token>`.
+The API is public by default, so the examples below work without an authorization header. Private deployments can opt in to bearer authentication with `API_AUTH_REQUIRED=true` and `API_KEY`.
 
 ### Create a YouCam outfit preview
 
 ```bash
 curl -X POST "$BASE_URL/v1/style-jobs" \
-  -H "Authorization: Bearer $API_TOKEN" \
   -F "identity_image=@person.jpg" \
   -F "garment_image=@outfit.jpg" \
   -F "garment_category=auto"
@@ -243,7 +242,6 @@ For a public Instagram post or reel, send `instagram_url` instead of `garment_im
 
 ```bash
 curl -X POST "$BASE_URL/v1/style-jobs/$STYLE_ID/garment-selection" \
-  -H "Authorization: Bearer $API_TOKEN" \
   -F "candidate_id=look-1"
 ```
 
@@ -251,7 +249,6 @@ Public extraction tries direct media, gallery media, and the post's public previ
 
 ```bash
 curl -X POST "$BASE_URL/v1/style-jobs/$STYLE_ID/approve" \
-  -H "Authorization: Bearer $API_TOKEN" \
   -F "method=splatfacto" \
   -F "iterations=10000"
 ```
@@ -259,11 +256,9 @@ curl -X POST "$BASE_URL/v1/style-jobs/$STYLE_ID/approve" \
 ### Follow and download the 3D job
 
 ```bash
-curl -H "Authorization: Bearer $API_TOKEN" \
-  "$BASE_URL/v1/pipelines/$PIPELINE_ID"
+curl "$BASE_URL/v1/pipelines/$PIPELINE_ID"
 
-curl -L -H "Authorization: Bearer $API_TOKEN" \
-  -o model.zip "$BASE_URL/v1/pipelines/$PIPELINE_ID/model"
+curl -L -o model.zip "$BASE_URL/v1/pipelines/$PIPELINE_ID/model"
 ```
 
 Use `POST /v1/pipelines/{id}/retrain` with `method=splatfacto`, `nerfacto`, or `nerfacto-big` to reuse the existing views without repeating the image pipeline.
@@ -272,6 +267,7 @@ Use `POST /v1/pipelines/{id}/retrain` with `method=splatfacto`, `nerfacto`, or `
 
 | Variable | Default | Description |
 | --- | ---: | --- |
+| `API_AUTH_REQUIRED` | `false` | Enables optional bearer authentication for private deployments |
 | `PIPELINE_VIEW_COUNT` | `12` | Fixed closed-orbit frame count |
 | `PIPELINE_ELEVATION` | `10` | Camera elevation in degrees |
 | `PIPELINE_COHERENCE_THRESHOLD` | `0.80` | Preferred semantic quality target |
@@ -313,7 +309,7 @@ Use `POST /v1/pipelines/{id}/retrain` with `method=splatfacto`, `nerfacto`, or `
 
 ## Security
 
-- YouCam credentials and the application bearer token stay server-side.
+- YouCam credentials stay server-side; optional private-deployment API credentials are never exposed to the browser.
 - Credential files, generated models, browser profiles, and job archives are ignored by Git.
 - Uploads are size- and MIME-limited; ZIP extraction rejects traversal and symlinks.
 - The systemd service uses a non-login user, `NoNewPrivileges`, `PrivateTmp`, and a restricted writable path.

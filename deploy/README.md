@@ -56,13 +56,14 @@ sudo systemctl is-active nerfstudio-api caddy docker
 nvidia-smi
 ```
 
-Run the bundled smoke test after exporting the deployment URL and bearer token:
+Run the bundled smoke test after exporting the deployment URL:
 
 ```bash
 export NERFSTUDIO_URL="https://your-domain.example"
-export NERFSTUDIO_API_KEY="replace-me"
 bash deploy/smoke_test.sh
 ```
+
+The studio and API are public by default. For a private deployment, set `API_AUTH_REQUIRED=true` and configure `API_KEY` in `/opt/nerfstudio-api/.env` before restarting the service.
 
 ## Upgrade
 

@@ -44,7 +44,13 @@ CACHE_ROOT = Path(os.getenv("CACHE_ROOT", "/var/lib/nerfstudio-api/cache"))
 PIPELINE_ROOT = Path(os.getenv("PIPELINE_ROOT", "/var/lib/nerfstudio-api/pipelines"))
 STYLE_ROOT = Path(os.getenv("STYLE_ROOT", "/var/lib/nerfstudio-api/style-jobs"))
 FRONTEND_ROOT = Path(os.getenv("FRONTEND_ROOT", "/opt/nerfstudio-api/frontend"))
-API_KEY = os.environ["API_KEY"]
+API_AUTH_REQUIRED = os.getenv("API_AUTH_REQUIRED", "false").strip().lower() in {
+    "1",
+    "true",
+    "yes",
+    "on",
+}
+API_KEY = os.getenv("API_KEY", "")
 NERFSTUDIO_IMAGE = os.getenv(
     "NERFSTUDIO_IMAGE", "ghcr.io/nerfstudio-project/nerfstudio:latest"
 )
@@ -105,7 +111,7 @@ logger = logging.getLogger("nerfstudio-api")
 app = FastAPI(
     title="Nerfstudio A100 API",
     version="1.0.0",
-    description="Authenticated, asynchronous Nerfstudio reconstruction jobs.",
+    description="Asynchronous virtual fitting and 3D reconstruction jobs.",
 )
 queue: asyncio.Queue[str] = asyncio.Queue()
 pipeline_queue: asyncio.Queue[str] = asyncio.Queue()
@@ -338,6 +344,10 @@ def synced_pipeline(pipeline_id: str) -> dict:
 
 
 def authenticate(authorization: Annotated[str | None, Header()] = None) -> None:
+    if not API_AUTH_REQUIRED:
+        return
+    if not API_KEY:
+        raise HTTPException(503, "API authentication is enabled but not configured")
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(401, "Bearer token required")
     supplied = authorization.removeprefix("Bearer ").strip()
