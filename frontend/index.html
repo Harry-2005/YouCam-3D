@@ -7,8 +7,8 @@
     <title>Parallax — Your YouCam Fitting Room</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Bodoni+Moda:opsz,wght@6..96,500;6..96,600;6..96,700&family=DM+Sans:wght@400;500;600;700&family=Silkscreen:wght@400;700&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="./styles.css?v=20260817-clay-1" />
+    <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,600;12..96,700;12..96,800&family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="./styles.css?v=20260817-editorial-2" />
   </head>
   <body class="landing-body">
     <div class="landing-noise" aria-hidden="true"></div>
@@ -34,22 +34,64 @@
         </div>
       </section>
 
-      <section class="landing-proof" id="how-it-works">
-        <div class="proof-heading"><p class="eyebrow">ONE CLEAR FLOW</p><h2>From saved post<br />to <em>your</em> look.</h2></div>
-        <div class="proof-steps">
-          <article><span>01</span><div><strong>Bring yourself</strong><p>Add one clear, front-facing photo. It stays inside your private session.</p></div></article>
-          <article><span>02</span><div><strong>Paste or upload</strong><p>Use a public Instagram link. If there are several outfits, you choose the exact one.</p></div></article>
-          <article><span>03</span><div><strong>Fit with YouCam</strong><p>YouCam creates the try-on preview. Approve it only when it feels right.</p></div></article>
-          <article><span>04</span><div><strong>Explore every angle</strong><p>Generate consistent views and open the finished 3D look in your browser.</p></div></article>
+      <section class="fashion-ticker" aria-label="Product capabilities">
+        <div class="ticker-track">
+          <span><i></i> PUBLIC POST TO OUTFIT</span><b>✦</b><span><i></i> MULTIPLE LOOK DETECTION</span><b>✦</b><span><i></i> YOUCAM VIRTUAL FIT</span><b>✦</b><span><i></i> 12 CONSISTENT ANGLES</span><b>✦</b><span><i></i> INTERACTIVE 3D</span><b>✦</b>
+          <span aria-hidden="true"><i></i> PUBLIC POST TO OUTFIT</span><b aria-hidden="true">✦</b><span aria-hidden="true"><i></i> MULTIPLE LOOK DETECTION</span><b aria-hidden="true">✦</b><span aria-hidden="true"><i></i> YOUCAM VIRTUAL FIT</span><b aria-hidden="true">✦</b><span aria-hidden="true"><i></i> 12 CONSISTENT ANGLES</span><b aria-hidden="true">✦</b><span aria-hidden="true"><i></i> INTERACTIVE 3D</span><b aria-hidden="true">✦</b>
         </div>
       </section>
 
-      <section class="wardrobe-story">
+      <section class="lookbook-section" id="lookbook" data-reveal>
+        <header class="lookbook-heading">
+          <div><p class="eyebrow">ONE POST · EVERY POSSIBILITY</p><h2>Don’t guess the outfit.<br /><em>See every option.</em></h2></div>
+          <p>A reel can move fast. Parallax slows it down, separates distinct looks, and gives you a clean visual choice before your fitting begins.</p>
+        </header>
+        <div class="lookbook-grid">
+          <article class="lookbook-card lookbook-feature">
+            <div class="lookbook-image wardrobe-crop"><img src="./assets/clay-wardrobe-v1.png" alt="Three sculpted outfit choices on a wardrobe rail" /></div>
+            <div class="lookbook-copy"><span>01 · DISCOVER</span><h3>All the looks,<br />separated clearly.</h3><p>Repeated frames are grouped. Different garments stay visible.</p></div>
+          </article>
+          <article class="lookbook-card">
+            <div class="lookbook-image figure-crop"><img src="./assets/clay-runway-v2.png" alt="Clay fashion figure in a pink tailored outfit" /></div>
+            <div class="lookbook-copy"><span>02 · FIT</span><h3>Keep your face.<br />Change the clothes.</h3><p>YouCam applies only the outfit you approved.</p></div>
+          </article>
+          <article class="lookbook-card lookbook-orbit">
+            <div class="mini-orbit" aria-hidden="true"><i></i><i></i><i></i><img src="./assets/clay-runway-v2.png" alt="" /></div>
+            <div class="angle-chips" aria-hidden="true"><span>0°</span><span>90°</span><span>180°</span></div>
+            <div class="lookbook-copy"><span>03 · EXPLORE</span><h3>One look.<br />Every angle.</h3><p>Review twelve coherent views and open the result in 3D.</p></div>
+          </article>
+        </div>
+      </section>
+
+      <section class="landing-proof" id="how-it-works" data-reveal>
+        <div class="proof-heading"><p class="eyebrow">ONE CLEAR FLOW</p><h2>From saved post<br />to <em>your</em> look.</h2></div>
+        <div class="proof-steps">
+          <article><span>01</span><div class="step-icon">YOU</div><div><strong>Bring yourself</strong><p>Add one clear, front-facing photo. It stays inside your private session.</p></div></article>
+          <article><span>02</span><div class="step-icon">URL</div><div><strong>Paste or upload</strong><p>Use a public Instagram link. If there are several outfits, you choose the exact one.</p></div></article>
+          <article><span>03</span><div class="step-icon">FIT</div><div><strong>Fit with YouCam</strong><p>YouCam creates the try-on preview. Approve it only when it feels right.</p></div></article>
+          <article><span>04</span><div class="step-icon">3D</div><div><strong>Explore every angle</strong><p>Generate consistent views and open the finished 3D look in your browser.</p></div></article>
+        </div>
+      </section>
+
+      <section class="wardrobe-story" data-reveal>
         <img src="./assets/clay-wardrobe-v1.png" alt="Clay wardrobe rail with three pink and ivory outfit options" />
         <div><p class="eyebrow">THE RIGHT OUTFIT, NOT A GUESS</p><h2>A reel can hold<br /><em>more than one look.</em></h2><p>Parallax scans public frames, groups repeated views, and lays out the distinct clothing options. You pick the jacket, dress, trousers, or full look before anything is sent to YouCam.</p><a href="./studio.html">Choose from a post <span>→</span></a></div>
+      </section>
+
+      <section class="confidence-strip" id="confidence" data-reveal>
+        <div><span>YOU STAY YOU</span><strong>Face-aware fitting</strong><p>Your identity photo remains the anchor for the final preview.</p></div>
+        <div><span>YOU PICK THE LOOK</span><strong>No silent guesses</strong><p>When several outfits appear, the fitting waits for your choice.</p></div>
+        <div><span>YOU CONTROL THE VIEW</span><strong>Interactive result</strong><p>Rotate, zoom, relight, and download from the studio dashboard.</p></div>
+      </section>
+
+      <section class="landing-final-cta" id="ready" data-reveal>
+        <div class="final-cta-figure"><img src="./assets/clay-runway-v2.png" alt="Pink clay runway figure" /></div>
+        <div><p class="eyebrow">YOUR NEXT SAVED LOOK</p><h2>Turn inspiration<br />into something <em>wearable.</em></h2><p>One photo. One post. One clear fitting flow powered by YouCam.</p><a class="landing-primary" href="./studio.html">Enter the fitting room <b>→</b></a></div>
+        <div class="final-pixel-stack" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div>
       </section>
     </main>
 
     <footer class="landing-footer"><a class="brand" href="./"><span class="brand-pixels"><i></i><i></i><i></i><i></i></span><span><strong>PARALLAX</strong><small>POWERED BY YOUCAM</small></span></a><p>Private fitting, clearer choices, tangible results.</p><a href="./studio.html">ENTER STUDIO ↗</a></footer>
+    <script src="./landing.js?v=20260817-editorial-2" defer></script>
   </body>
 </html>

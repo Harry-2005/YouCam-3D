@@ -7,8 +7,8 @@
     <title>Parallax Studio — YouCam Fitting Room</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Bodoni+Moda:opsz,wght@6..96,500;6..96,600;6..96,700&family=DM+Sans:wght@400;500;600;700&family=Silkscreen:wght@400;700&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="./styles.css?v=20260817-clay-1" />
+    <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,600;12..96,700;12..96,800&family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="./styles.css?v=20260817-editorial-2" />
     <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/","@sparkjsdev/spark":"https://sparkjs.dev/releases/spark/2.1.0/spark.module.js"}}</script>
   </head>
   <body class="studio-body setup-mode" data-page="create" data-result-tab="angles">
@@ -43,7 +43,19 @@
 
     <main class="studio-main">
       <section class="studio-page active" data-page-panel="create">
-        <header class="page-intro"><p class="eyebrow">STEP 01 · START A FITTING</p><h1>Bring the photo.<br /><em>Borrow the look.</em></h1><p>Add one clear photo of yourself and either paste a public Instagram link or upload an outfit image.</p></header>
+        <header class="page-intro start-page-intro">
+          <div class="start-intro-copy"><p class="eyebrow">STEP 01 · START A FITTING</p><h1>Bring the photo.<br /><em>Borrow the look.</em></h1><p>Add one clear photo of yourself and either paste a public Instagram link or upload an outfit image.</p></div>
+          <aside class="studio-guide-card" aria-label="Photo quality guide">
+            <div class="guide-visual"><img src="./assets/clay-runway-v2.png" alt="Clay figure illustrating a full body reference photo" /><span>GOOD<br />FRAME</span><i></i></div>
+            <div class="guide-copy"><span>BEST RESULT</span><strong>Face forward.<br />Full outfit visible.</strong><ul><li>Even lighting</li><li>Relaxed pose</li><li>No heavy filters</li></ul></div>
+          </aside>
+        </header>
+        <div class="studio-flow-strip" aria-label="Fitting process">
+          <div><i>1</i><span><strong>Add your photo</strong><small>Clear face and body</small></span></div><b>→</b>
+          <div><i>2</i><span><strong>Choose a look</strong><small>Link or upload</small></span></div><b>→</b>
+          <div><i>3</i><span><strong>Review the fit</strong><small>Powered by YouCam</small></span></div><b>→</b>
+          <div><i>4</i><span><strong>Explore in 3D</strong><small>Rotate and relight</small></span></div>
+        </div>
         <form id="pipelineForm" class="fitting-composer">
           <section class="input-card">
             <div class="input-card-head"><span>01</span><div><h2>Your photo</h2><p>Use a clear, front-facing image with your face and body visible.</p></div><small id="fileCount">0 / 8</small></div>
@@ -96,6 +108,6 @@
     </main>
 
     <dialog id="logDialog"><div class="dialog-head"><div><p class="eyebrow">BUILD DETAILS</p><h3>Your 3D process</h3></div><button id="closeLog" aria-label="Close">×</button></div><pre id="logContent">No details yet.</pre></dialog><div class="toast" id="toast" role="status"></div>
-    <script type="module" src="./app.js?v=20260817-clay-1"></script>
+    <script type="module" src="./app.js?v=20260817-editorial-2"></script>
   </body>
 </html>
