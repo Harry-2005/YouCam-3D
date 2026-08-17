@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="240" viewBox="0 0 1200 240" role="img" aria-labelledby="title description">
+  <title id="title">Parallax</title>
+  <description id="description">Parallax pixel logo and wordmark on a transparent background</description>
+  <g transform="translate(32 42)">
+    <rect x="0" y="0" width="34" height="34" rx="5" fill="#F43F7A"/>
+    <rect x="42" y="0" width="22" height="22" rx="4" fill="#FF9FBD"/>
+    <rect x="0" y="42" width="22" height="22" rx="4" fill="#FF9FBD"/>
+    <rect x="30" y="30" width="34" height="34" rx="5" fill="#D12F67"/>
+    <rect x="42" y="72" width="22" height="22" rx="4" fill="#C7B7FF"/>
+    <rect x="72" y="42" width="22" height="22" rx="4" fill="#C7B7FF"/>
+  </g>
+  <text x="166" y="137" fill="#241820" font-family="Arial, Helvetica, sans-serif" font-size="112" font-weight="800" letter-spacing="12">PARALLAX</text>
+  <text x="172" y="188" fill="#8A6C79" font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="600" letter-spacing="7">YOUCAM POWERED VIRTUAL FITTING IN 3D</text>
+</svg>
