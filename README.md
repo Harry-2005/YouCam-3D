@@ -1,4 +1,4 @@
-![Parallax logo and wordmark](docs/assets/parallax-wordmark.svg)
+![Parallax logo and wordmark](https://raw.githubusercontent.com/Harry-2005/YouCam-3D/main/docs/assets/parallax-wordmark.svg)
 
 # Parallax
 
@@ -19,7 +19,7 @@ Parallax is a virtual fitting and 3D fashion platform. A user uploads a clear ph
 
 After the user approves the fitting, Parallax creates 12 consistent views of the same person and outfit. Those views are checked for identity, pose, clothing, color, and camera order before GPU reconstruction begins. The final result is an interactive, full-color 3D look that can be rotated, inspected, relit when supported, and downloaded from the dashboard.
 
-![Three consistent views of the same fitted look](docs/assets/orbit-views.png)
+![Three consistent views of the same fitted look](https://raw.githubusercontent.com/Harry-2005/YouCam-3D/main/docs/assets/orbit-views.png)
 
 ## Impact
 
@@ -70,7 +70,7 @@ Parallax extracts the clearest clothing frames and presents the three outfits as
 
 After approval, Parallax keeps the same face, pose, jacket construction, colors, and accessories while creating 12 camera views at 30 degree intervals. The quality layer checks the views, and the A100 worker reconstructs them into a full-color 3D result. The user can rotate the model, inspect the outfit from the back and sides, adjust lighting on a mesh result, and download the final artifact.
 
-![Background-removed fitted subject](docs/assets/hero-subject.png)
+![Background-removed fitted subject](https://raw.githubusercontent.com/Harry-2005/YouCam-3D/main/docs/assets/hero-subject.png)
 
 ## System architecture
 
