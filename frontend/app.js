@@ -103,6 +103,20 @@ function notify(message) {
   notify.timer = setTimeout(() => toast.classList.remove("show"), 3200);
 }
 
+function customerMessage(error, fallback = "We could not complete this request. Please try again.") {
+  const message = String(error?.message || error || "").toLowerCase();
+  if (message.includes("401") || message.includes("403") || message.includes("access key") || message.includes("unauthorized") || message.includes("forbidden")) {
+    return "Your access key could not be verified. Check the key and try again.";
+  }
+  if (message.includes("instagram") || message.includes("cookie") || message.includes("private post") || message.includes("media download")) {
+    return "We could not access that Instagram post. Confirm that it is public or upload an outfit image.";
+  }
+  if (message.includes("failed to fetch") || message.includes("network") || message.includes("timeout")) {
+    return "The service is temporarily unavailable. Please try again shortly.";
+  }
+  return fallback;
+}
+
 function unlockPage(page) {
   pageButtons.find((button) => button.dataset.pageTarget === page)?.removeAttribute("disabled");
 }
@@ -146,7 +160,7 @@ async function apiFetch(path, options = {}) {
   if (response.status === 401 || response.status === 403) {
     authGate.classList.remove("hidden");
     connectionButton.classList.remove("online");
-    connectionText.textContent = "Locked";
+    connectionText.textContent = "Secure access";
   }
   if (!response.ok) {
     let message = `${response.status} ${response.statusText}`;
@@ -163,22 +177,22 @@ async function connect(token = tokenInput.value.trim()) {
   authError.textContent = "";
   if (!token) return (authError.textContent = "Your access key is required.");
   connectButton.disabled = true;
-  connectButton.querySelector("span").textContent = "Opening your fitting room...";
+  connectButton.querySelector("span").textContent = "Verifying access...";
   state.token = token;
   try {
     await apiFetch("/v1");
     localStorage.setItem("parallax_token", token);
     authGate.classList.add("hidden");
     connectionButton.classList.add("online");
-    connectionText.textContent = "Fitting room live";
+    connectionText.textContent = "Connected";
     await loadHistory();
     await loadLatestStyleJob();
   } catch (error) {
-    authError.textContent = error.message;
+    authError.textContent = customerMessage(error, "Your access key could not be verified. Check the key and try again.");
     state.token = "";
   } finally {
     connectButton.disabled = false;
-    connectButton.querySelector("span").textContent = "Open my fitting room";
+    connectButton.querySelector("span").textContent = "Open fitting room";
   }
 }
 
@@ -252,15 +266,15 @@ function updatePrimaryAction() {
 
 function styleHumanStatus(status) {
   return {
-    queued: "Getting your outfit ready",
-    downloading_media: "Reading the public Instagram media",
-    selecting_garment: "Grouping the distinct outfits",
-    awaiting_garment_selection: "Choose which outfit you want",
-    uploading_assets: "Preparing your private photos",
-    generating_tryon: "Creating your outfit preview",
-    complete: "Your outfit preview is ready",
-    approved: "Your look is ready for 3D",
-    failed: "We could not finish this preview",
+    queued: "Outfit review scheduled",
+    downloading_media: "Reviewing the Instagram post",
+    selecting_garment: "Organizing distinct outfit options",
+    awaiting_garment_selection: "Select your preferred outfit",
+    uploading_assets: "Preparing the fitting images",
+    generating_tryon: "Creating your YouCam fitting",
+    complete: "Your YouCam fitting is complete",
+    approved: "Your fitting is approved for 3D",
+    failed: "The fitting could not be completed",
   }[status] || status;
 }
 
@@ -286,8 +300,8 @@ async function renderCandidateOptions(job) {
   state.selectedCandidateId = null;
   candidateGrid.innerHTML = "";
   confirmCandidateButton.disabled = true;
-  candidateChoiceTitle.textContent = "Choose one outfit";
-  candidateChoiceCopy.textContent = "YouCam will use only the option you confirm.";
+  candidateChoiceTitle.textContent = "Select an outfit";
+  candidateChoiceCopy.textContent = "YouCam will apply only the option you confirm.";
   const categoryLabels = { upper_body: "Top or jacket", lower_body: "Bottom", full_body: "Full look" };
   for (const option of job.candidate_options || []) {
     const card = document.createElement("button");
@@ -328,10 +342,10 @@ async function renderStyleJob(job) {
   styleProgress.classList.remove("hidden", "failed", "complete");
   styleProgress.classList.toggle("failed", job.status === "failed");
   styleProgress.classList.toggle("complete", ["complete", "approved"].includes(job.status));
-  styleProgressText.textContent = job.error || styleHumanStatus(job.status);
+  styleProgressText.textContent = job.status === "failed" ? "The fitting could not be completed. Review the images and try again." : styleHumanStatus(job.status);
   if (job.status === "failed") {
     clearInterval(state.stylePollTimer);
-    stylePreviewButton.querySelector("span").textContent = "Try again";
+    stylePreviewButton.querySelector("span").textContent = "Review outfit options";
     goToPage("create");
     updatePrimaryAction();
     return;
@@ -341,7 +355,7 @@ async function renderStyleJob(job) {
     await renderCandidateOptions(job);
     unlockPage("select");
     goToPage("select");
-    stylePreviewButton.querySelector("span").textContent = "Find another outfit";
+    stylePreviewButton.querySelector("span").textContent = "Review another outfit";
     updatePrimaryAction();
     return;
   }
@@ -357,7 +371,7 @@ async function renderStyleJob(job) {
   advancedPanel.open = false;
   unlockPage("preview");
   goToPage("preview");
-  stylePreviewButton.querySelector("span").textContent = "Find another outfit";
+  stylePreviewButton.querySelector("span").textContent = "Review another outfit";
   updatePrimaryAction();
 }
 
@@ -367,7 +381,7 @@ async function pollStyleJob() {
     const response = await apiFetch(`/v1/style-jobs/${state.styleJob.id}`);
     await renderStyleJob(await response.json());
   } catch (error) {
-    styleProgressText.textContent = error.message;
+    styleProgressText.textContent = customerMessage(error, "We could not refresh the fitting status. Please try again.");
   }
 }
 
@@ -387,30 +401,30 @@ async function loadLatestStyleJob() {
 
 stylePreviewButton.addEventListener("click", async () => {
   formError.textContent = "";
-  if (!state.references.length) return (formError.textContent = "Add the person's photo first.");
-  if (!instagramUrl.value.trim() && !state.garmentFile) return (formError.textContent = "Add an Instagram reel/post URL or a garment image.");
+  if (!state.references.length) return (formError.textContent = "Add a clear reference photo to continue.");
+  if (!instagramUrl.value.trim() && !state.garmentFile) return (formError.textContent = "Add a public Instagram link or upload an outfit image to continue.");
   const payload = new FormData();
   payload.append("identity_image", state.references[0].file);
   payload.append("instagram_url", instagramUrl.value.trim());
   payload.append("garment_category", garmentCategory.value);
   if (state.garmentFile) payload.append("garment_image", state.garmentFile);
   stylePreviewButton.disabled = true;
-  stylePreviewButton.querySelector("span").textContent = "Reading the source...";
+  stylePreviewButton.querySelector("span").textContent = "Reviewing the outfit...";
   stylePreview.classList.add("hidden");
   advancedPanel.open = false;
   styleProgress.classList.remove("hidden", "failed", "complete");
-  styleProgressText.textContent = "Preparing your photos...";
+  styleProgressText.textContent = "Preparing your fitting...";
   try {
     const response = await apiFetch("/v1/style-jobs", { method: "POST", body: payload });
     state.styleJob = await response.json();
     await renderStyleJob(state.styleJob);
     clearInterval(state.stylePollTimer);
     state.stylePollTimer = setInterval(pollStyleJob, 3000);
-    notify("Reading the outfit source");
+    notify("Outfit review started");
   } catch (error) {
     styleProgress.classList.add("failed");
-    styleProgressText.textContent = error.message;
-    stylePreviewButton.querySelector("span").textContent = "Find my outfit";
+    styleProgressText.textContent = customerMessage(error, "We could not create this fitting. Review the images and try again.");
+    stylePreviewButton.querySelector("span").textContent = "Review outfit options";
     updatePrimaryAction();
   }
 });
@@ -420,19 +434,19 @@ confirmCandidateButton.addEventListener("click", async () => {
   const payload = new FormData();
   payload.append("candidate_id", state.selectedCandidateId);
   confirmCandidateButton.disabled = true;
-  confirmCandidateButton.querySelector("span").textContent = "Sending to YouCam...";
-  candidateChoiceCopy.textContent = "Your selected outfit is being fitted to your photo now.";
+  confirmCandidateButton.querySelector("span").textContent = "Creating your fitting...";
+  candidateChoiceCopy.textContent = "YouCam is applying the selected outfit to your photo.";
   try {
     const response = await apiFetch(`/v1/style-jobs/${state.styleJob.id}/garment-selection`, { method: "POST", body: payload });
     state.styleJob = await response.json();
     clearInterval(state.stylePollTimer);
     state.stylePollTimer = setInterval(pollStyleJob, 3000);
-    notify("Outfit confirmed — YouCam fitting started");
+    notify("Outfit confirmed. Your YouCam fitting is in progress.");
   } catch (error) {
-    candidateChoiceCopy.textContent = error.message;
+    candidateChoiceCopy.textContent = customerMessage(error, "We could not confirm this outfit. Please make your selection again.");
     confirmCandidateButton.disabled = false;
   } finally {
-    confirmCandidateButton.querySelector("span").textContent = "Use this outfit";
+    confirmCandidateButton.querySelector("span").textContent = "Confirm outfit";
   }
 });
 
@@ -443,27 +457,27 @@ approveStyleButton.addEventListener("click", async () => {
   payload.append("method", $("#methodInput").value);
   payload.append("iterations", $("#iterationsInput").value);
   approveStyleButton.disabled = true;
-  approveStyleButton.querySelector("span").textContent = "Preparing your 3D look...";
+  approveStyleButton.querySelector("span").textContent = "Starting 3D creation...";
   try {
     const response = await apiFetch(`/v1/style-jobs/${state.styleJob.id}/approve`, { method: "POST", body: payload });
     const pipeline = await response.json();
     promptInput.value = pipeline.prompt;
     stylePreview.classList.add("hidden");
     selectPipeline(pipeline);
-    notify("Look approved — creating 12 consistent views");
+    notify("Fitting approved. Creating twelve consistent views.");
     await loadHistory();
   } catch (error) {
-    formError.textContent = error.message;
+    formError.textContent = customerMessage(error, "We could not start 3D creation. Please try again.");
   } finally {
     approveStyleButton.disabled = false;
-    approveStyleButton.querySelector("span").textContent = "Looks good — make it 3D";
+    approveStyleButton.querySelector("span").textContent = "Approve and create 3D";
   }
 });
 
 form.addEventListener("submit", async (event) => {
   event.preventDefault();
   formError.textContent = "";
-  if (!state.references.length) return (formError.textContent = "Add at least one person photo.");
+  if (!state.references.length) return (formError.textContent = "Add a clear reference photo to continue.");
   const payload = new FormData();
   payload.append("prompt", promptInput.value.trim());
   state.references.forEach(({ file }) => payload.append("references", file));
@@ -471,32 +485,32 @@ form.addEventListener("submit", async (event) => {
   payload.append("method", $("#methodInput").value);
   payload.append("iterations", $("#iterationsInput").value);
   launchButton.disabled = true;
-  launchButton.querySelector("span").textContent = "Reading references…";
+  launchButton.querySelector("span").textContent = "Preparing 3D creation…";
   try {
     const response = await apiFetch("/v1/pipelines", { method: "POST", body: payload });
     const pipeline = await response.json();
     promptInput.value = pipeline.prompt;
     selectPipeline(pipeline);
-    notify("Subject directive generated · orbit queued");
+    notify("Your 3D look has been scheduled for creation.");
     await loadHistory();
   } catch (error) {
-    formError.textContent = error.message;
+    formError.textContent = customerMessage(error, "We could not start 3D creation. Please try again.");
   } finally {
     launchButton.disabled = false;
-    launchButton.querySelector("span").textContent = "Build 3D from my photos";
+    launchButton.querySelector("span").textContent = "Create my 3D look";
   }
 });
 
 function humanStatus(status) {
   return {
-    queued: "Getting your look ready",
-    generating_views: "Creating every angle",
-    stabilizing_views: "Keeping your look consistent",
-    verifying_views: "Checking your 3D views",
-    preparing_dataset: "Preparing your 3D view",
-    training: "Building your 3D model",
-    complete: "Your 3D look is ready",
-    failed: "We could not finish this look",
+    queued: "Creation scheduled",
+    generating_views: "Creating angle views",
+    stabilizing_views: "Refining visual consistency",
+    verifying_views: "Reviewing angle views",
+    preparing_dataset: "Preparing the 3D composition",
+    training: "Creating the 3D model",
+    complete: "3D look complete",
+    failed: "Creation could not be completed",
   }[status] || status;
 }
 
@@ -582,27 +596,27 @@ async function pollPipeline() {
       await loadHistory();
     }
   } catch (error) {
-    notify(error.message);
+    notify(customerMessage(error, "We could not refresh this look. Please try again."));
   }
 }
 
 function renderPipeline(pipeline) {
   stageEyebrow.textContent = humanStatus(pipeline.status);
-  stageTitle.innerHTML = pipeline.status === "complete" ? "Your look,<br><em>now in 3D.</em>" : "Creating your<br><em>3D look...</em>";
+  stageTitle.innerHTML = pipeline.status === "complete" ? "Your look,<br><em>now in 3D.</em>" : "Creating your<br><em>3D look.</em>";
   jobStamp.querySelector("strong").textContent = pipeline.id.slice(0, 8).toUpperCase();
   jobStamp.querySelector("small").textContent = humanStatus(pipeline.status).toUpperCase();
   angleReadout.textContent = pipeline.current_angle == null ? "AZ —° / EL 10°" : `AZ ${Math.round(pipeline.current_angle)}° / EL 10°`;
   updatePhases(pipeline);
   renderContactSheet();
   const score = pipeline.coherence_score;
-  coherenceValue.textContent = score == null ? (["stabilizing_views", "verifying_views"].includes(pipeline.status) ? "Checking..." : "Waiting") : `${Math.round(score * 100)} / 100`;
+  coherenceValue.textContent = score == null ? (["stabilizing_views", "verifying_views"].includes(pipeline.status) ? "In review" : "Assessment pending") : `${Math.round(score * 100)} / 100`;
   coherenceMeter.style.width = `${(score || 0) * 100}%`;
-  coherenceNote.textContent = pipeline.verification_notes?.[0] || "We keep your identity, outfit, pose, and colors consistent across every angle.";
+  coherenceNote.textContent = pipeline.verification_notes?.[0] || "Identity, outfit, pose, and color are evaluated across every angle.";
   datasetButton.disabled = !["training", "complete"].includes(pipeline.status);
   logButton.disabled = false;
   downloadButton.disabled = pipeline.status !== "complete";
-  viewportTitle.textContent = pipeline.status === "failed" ? "This look needs another try" : pipeline.status === "training" ? "Building your 3D view..." : pipeline.status === "complete" ? "Adding the finishing details..." : "Your 3D look will appear here";
-  viewportCopy.textContent = pipeline.error || (pipeline.status === "training" ? "We are shaping the model and applying its full-color material." : "Your consistent angle views are ready for the 3D build.");
+  viewportTitle.textContent = pipeline.status === "failed" ? "Creation could not be completed" : pipeline.status === "training" ? "Creating your 3D model" : pipeline.status === "complete" ? "Preparing the interactive preview" : "Your 3D look will appear here";
+  viewportCopy.textContent = pipeline.status === "failed" ? "Please try again with clear, consistent reference images." : pipeline.status === "training" ? "The model and its full-color materials are being prepared." : "Consistent angle views will be assembled into the final 3D result.";
   [...historyList.querySelectorAll(".history-item")].forEach((item) => item.classList.toggle("selected", item.dataset.id === pipeline.id));
   if (pipeline.status === "complete" && state.renderedModelId !== pipeline.id) {
     setResultTab("model");
@@ -616,7 +630,7 @@ async function loadHistory() {
     const pipelines = await response.json();
     historyList.innerHTML = "";
     if (!pipelines.length) {
-      historyList.innerHTML = '<div class="library-empty"><img loading="lazy" src="./assets/clay-look-library-v1.webp" alt="Clay fashion archive cabinet filled with different saved-look objects" /><div><span>YOUR LOOK ARCHIVE</span><strong>Nothing saved yet.</strong><p>Your approved 3D fittings will collect here, ready to reopen.</p></div></div>';
+      historyList.innerHTML = '<div class="library-empty"><img loading="lazy" src="./assets/clay-look-library-v1.webp" alt="Clay fashion archive cabinet filled with different saved-look objects" /><div><span>YOUR LOOK ARCHIVE</span><strong>Your collection is ready.</strong><p>Completed 3D fittings will appear here for convenient access.</p></div></div>';
       return;
     }
     pipelines.forEach((pipeline) => {
@@ -629,7 +643,7 @@ async function loadHistory() {
       button.addEventListener("click", () => selectPipeline(pipeline));
       historyList.append(button);
     });
-  } catch (error) { historyList.innerHTML = `<p class="muted">${error.message}</p>`; }
+  } catch (error) { historyList.innerHTML = `<p class="muted">${customerMessage(error, "Your saved looks are temporarily unavailable. Please refresh to try again.")}</p>`; }
 }
 
 $("#refreshHistory").addEventListener("click", loadHistory);
@@ -646,9 +660,9 @@ datasetButton.addEventListener("click", () => state.pipeline && authenticatedDow
 downloadButton.addEventListener("click", () => state.pipeline && authenticatedDownload(`/v1/pipelines/${state.pipeline.id}/model`, `${state.pipeline.id}-model.zip`));
 logButton.addEventListener("click", async () => {
   if (!state.pipeline) return;
-  logDialog.showModal(); logContent.textContent = "Loading build details...";
+  logDialog.showModal(); logContent.textContent = "Preparing the creation report...";
   try { logContent.textContent = await (await apiFetch(`/v1/pipelines/${state.pipeline.id}/log`)).text(); }
-  catch (error) { logContent.textContent = error.message; }
+  catch (error) { logContent.textContent = customerMessage(error, "The creation report is temporarily unavailable."); }
 });
 $("#closeLog").addEventListener("click", () => logDialog.close());
 
@@ -710,10 +724,10 @@ function setLightingAvailable(available) {
   lightingAvailable = available;
   lightRig.classList.toggle("unavailable", !available);
   lightRigButton.classList.toggle("ready", available);
-  lightRigState.textContent = available ? "Live" : "Standby";
+  lightRigState.textContent = available ? "Available" : "Available after creation";
   lightStatus.textContent = available
-    ? "Live on the textured mesh · drag the source to relight"
-    : "Load a textured GLB or OBJ to preview directional light.";
+    ? "Drag the control to adjust light direction on the completed model."
+    : "Directional lighting becomes available when the 3D model is complete.";
 }
 
 function setDomeLighting(event) {
@@ -729,7 +743,7 @@ lightRigButton.addEventListener("click", () => {
   const opening = lightRig.classList.contains("hidden");
   lightRig.classList.toggle("hidden", !opening);
   lightRigButton.setAttribute("aria-expanded", String(opening));
-  if (opening && !lightingAvailable) notify("Lighting dome is ready; load a textured mesh to see its effect");
+  if (opening && !lightingAvailable) notify("Lighting controls become available when the 3D model is complete.");
 });
 lightCloseButton.addEventListener("click", () => {
   lightRig.classList.add("hidden");
@@ -739,7 +753,7 @@ lightCloseButton.addEventListener("click", () => {
 lightResetButton.addEventListener("click", () => {
   lighting = { ...defaultLighting };
   updateDirectionalLight();
-  notify("Studio lighting restored");
+  notify("Lighting settings restored");
 });
 lightAzimuth.addEventListener("input", () => { lighting.azimuth = Number(lightAzimuth.value); updateDirectionalLight(); });
 lightElevation.addEventListener("input", () => { lighting.elevation = Number(lightElevation.value); updateDirectionalLight(); });
@@ -811,7 +825,7 @@ animate();
 
 async function loadModel(id) {
   state.renderedModelId = id;
-  viewportTitle.textContent = "Opening your 3D look...";
+  viewportTitle.textContent = "Opening your 3D look";
   try {
     const response = await apiFetch(`/v1/pipelines/${id}/model`);
     const zipBytes = new Uint8Array(await response.arrayBuffer());
@@ -827,7 +841,7 @@ async function loadModel(id) {
     setLightingAvailable(false);
     grid.position.y = 0;
     if (glbName) {
-      viewportTitle.textContent = "Adding colors and materials...";
+      viewportTitle.textContent = "Applying color and materials";
       const bytes = files[glbName];
       const buffer = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
       const gltf = await new GLTFLoader().parseAsync(buffer, "");
@@ -847,17 +861,17 @@ async function loadModel(id) {
       const radius = frameModel(modelObject);
       grid.position.y = -radius * 1.02;
       modelFormat.textContent = "FULL-COLOR 3D LOOK";
-      pointCount.textContent = `${Math.round(triangles).toLocaleString()} SURFACE DETAILS`;
+      pointCount.textContent = `${Math.round(triangles).toLocaleString()} SURFACE ELEMENTS`;
       viewportEmpty.classList.add("hidden");
       setLightingAvailable(true);
-      notify("Your full-color 3D look is ready");
+      notify("Your full-color 3D look is complete.");
       return;
     }
     if (splatName) {
       modelObject = new SplatMesh({ fileBytes: files[splatName], fileName: "splat.ply" });
       modelObject.quaternion.set(1, 0, 0, 0);
       scene.add(modelObject);
-      viewportTitle.textContent = "Bringing your 3D view into focus...";
+      viewportTitle.textContent = "Preparing the interactive view";
       await modelObject.initialized;
       camera.fov = 23;
       grid.visible = false;
@@ -866,10 +880,10 @@ async function loadModel(id) {
       controls.autoRotate = false;
       controls.target.set(0, 0, 0); controls.update();
       modelFormat.textContent = "FULL-COLOR 3D VIEW";
-      pointCount.textContent = `${Number(modelObject.numSplats || 0).toLocaleString()} COLOR DETAILS`;
+      pointCount.textContent = `${Number(modelObject.numSplats || 0).toLocaleString()} COLOR ELEMENTS`;
       viewportEmpty.classList.add("hidden");
       setLightingAvailable(false);
-      notify("Your full-color 3D view is ready");
+      notify("Your full-color 3D view is complete.");
       return;
     }
     if (objName && textureName) {
@@ -886,10 +900,10 @@ async function loadModel(id) {
       camera.fov = 42;
       frameModel(modelObject);
       modelFormat.textContent = "FULL-COLOR 3D LOOK";
-      pointCount.textContent = `${Math.round(triangles).toLocaleString()} SURFACE DETAILS`;
+      pointCount.textContent = `${Math.round(triangles).toLocaleString()} SURFACE ELEMENTS`;
       viewportEmpty.classList.add("hidden");
       setLightingAvailable(true);
-      notify("Your textured 3D look is ready");
+      notify("Your textured 3D look is complete.");
       return;
     }
     const plyName = Object.keys(files).find((name) => name.toLowerCase().endsWith(".ply"));
@@ -906,13 +920,13 @@ async function loadModel(id) {
     viewportEmpty.classList.add("hidden");
     setLightingAvailable(false);
     modelFormat.textContent = geometry.getAttribute("color") ? "COLOR 3D VIEW" : "3D VIEW";
-    pointCount.textContent = `${geometry.getAttribute("position").count.toLocaleString()} MODEL DETAILS`;
-    notify("Your 3D look is ready");
+    pointCount.textContent = `${geometry.getAttribute("position").count.toLocaleString()} MODEL ELEMENTS`;
+    notify("Your 3D look is complete.");
   } catch (error) {
-    viewportTitle.textContent = "Could not load model"; viewportCopy.textContent = error.message; viewportEmpty.classList.remove("hidden");
+    viewportTitle.textContent = "The 3D preview is unavailable"; viewportCopy.textContent = customerMessage(error, "The model could not be opened. Please download it or try again."); viewportEmpty.classList.remove("hidden");
   }
 }
 
 renderContactSheet();
 if (state.token) { tokenInput.value = state.token; connect(state.token); }
-else { connectionText.textContent = "Locked"; }
+else { connectionText.textContent = "Secure access"; }
