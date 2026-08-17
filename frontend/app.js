@@ -615,7 +615,10 @@ async function loadHistory() {
     const response = await apiFetch("/v1/pipelines");
     const pipelines = await response.json();
     historyList.innerHTML = "";
-    if (!pipelines.length) return (historyList.innerHTML = '<p class="muted">No looks yet.</p>');
+    if (!pipelines.length) {
+      historyList.innerHTML = '<div class="library-empty"><img loading="lazy" src="./assets/clay-look-library-v1.webp" alt="Clay fashion archive cabinet filled with different saved-look objects" /><div><span>YOUR LOOK ARCHIVE</span><strong>Nothing saved yet.</strong><p>Your approved 3D fittings will collect here, ready to reopen.</p></div></div>';
+      return;
+    }
     pipelines.forEach((pipeline) => {
       const button = document.createElement("button");
       button.type = "button"; button.className = "history-item"; button.dataset.id = pipeline.id;
